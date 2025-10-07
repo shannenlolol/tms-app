@@ -114,7 +114,8 @@ const [rows, setRows] = useState([
                 </td>
                 <td className="px-6 py-4">
                   {isEditing ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
+
                       <button
                         onClick={saveEdit}
                         className="rounded-md bg-blue-600 text-white px-3 py-1 hover:bg-blue-700"

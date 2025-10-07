@@ -50,7 +50,6 @@ export default function Login() {
                   className="w-full rounded-xl bg-white/70 dark:bg-white/10 border border-slate-300/70 dark:border-white/10
                              px-3 py-2.5 text-slate-900 dark:text-slate-100 placeholder-slate-400
                              outline-none"
-                  placeholder="Enter username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
@@ -66,7 +65,7 @@ export default function Login() {
                              outline-none"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password" />
+                     />
                 </div>
               </div>
 

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { getUsers, createUser, updateUser, toggleActive } from "../api/users";
 
+// Helper to sort rows
+const sortByIdAsc = (arr) =>
+  [...arr].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+
 /** JS "enum" + labels **/
 const UserGroup = Object.freeze({ PL: "PL", PM: "PM", DEV: "DEV", AD: "AD" });
 const USER_GROUP_LABELS = {
@@ -53,7 +57,7 @@ export default function AdminHome() {
     (async () => {
       try {
         const data = await getUsers();
-        setRows(data);
+        setRows(sortByIdAsc(data));
       } catch (e) {
         setMsg(e.message || "Failed to load users");
       } finally {
@@ -151,8 +155,9 @@ export default function AdminHome() {
         ...newUser,
         active: !!newUser.active,
       });
-      // prepend the created row
-      setRows((rs) => [created, ...rs]);
+      // append the created row
+      setRows((rs) => sortByIdAsc([...rs, created])); // keep ascending order
+
       // reset the inline new row
       setNewUser(emptyNew);
     } catch (e) {
@@ -372,7 +377,7 @@ export default function AdminHome() {
 
                     <td className="px-6 py-4">
                       {isEditing ? (
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2">
                           <button
                             onClick={saveEdit}
                             className="rounded-md bg-blue-600 text-white px-3 py-1 hover:bg-blue-700"
