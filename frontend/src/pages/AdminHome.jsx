@@ -2,13 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getUsers, createUser, updateUser, toggleActive } from "../api/users";
 
 /** JS "enum" + labels **/
-const UserGroup = Object.freeze({
-  PL: "PL",
-  PM: "PM",
-  DEV: "DEV",
-  AD: "AD",
-});
-
+const UserGroup = Object.freeze({ PL: "PL", PM: "PM", DEV: "DEV", AD: "AD" });
 const USER_GROUP_LABELS = {
   [UserGroup.PL]: "Project Lead",
   [UserGroup.PM]: "Project Manager",
@@ -16,14 +10,22 @@ const USER_GROUP_LABELS = {
   [UserGroup.AD]: "Admin",
 };
 
-// front-end password rule (same as backend)
-const pwdOk = (s) =>
+// same rule as backend
+const pwdValid = (s) =>
   typeof s === "string" &&
   s.length >= 8 &&
   s.length <= 10 &&
   /[A-Za-z]/.test(s) &&
   /\d/.test(s) &&
   /[^A-Za-z0-9]/.test(s);
+
+// email regex check
+const re = /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])?@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
+
+const emailValid = (s) =>
+  typeof s === "string" &&
+  re.test(s);
+
 
 export default function AdminHome() {
   const [rows, setRows] = useState([]);
@@ -34,7 +36,7 @@ export default function AdminHome() {
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
 
-  // add state
+  // inline new row state (always rendered as first row)
   const emptyNew = useMemo(
     () => ({
       username: "",
@@ -45,7 +47,6 @@ export default function AdminHome() {
     }),
     []
   );
-  const [adding, setAdding] = useState(false);
   const [newUser, setNewUser] = useState(emptyNew);
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export default function AdminHome() {
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean),
-      password: "", // blank; only update if provided
+      password: "", // optional; only send if provided
     });
   };
 
@@ -86,22 +87,29 @@ export default function AdminHome() {
 
   const saveEdit = async () => {
     if (!draft) return;
-
-    // Do not send empty password; backend respects that too
     const payload = {
       username: draft.username,
-      email: draft.email,
       usergroup: draft.usergroup,
       active: !!draft.active,
     };
-    if (draft.password && !pwdOk(draft.password)) {
-      setMsg(
-        "Password must be 8–10 chars, include letters, numbers, and a special character."
-      );
-      return;
+    if (draft.email) {
+      if (!emailValid(draft.email)){
+        setMsg(
+          "Email must be valid."
+        );
+        return;
+      }
+      payload.email = draft.email;
     }
-    if (draft.password) payload.password = draft.password;
-
+    if (draft.password) {
+      if (!pwdValid(draft.password)) {
+        setMsg(
+          "Password must be 8–10 chars, include letters, numbers, and a special character."
+        );
+        return;
+      }
+      payload.password = draft.password;
+    }
     try {
       const updated = await updateUser(draft.id, payload);
       setRows((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
@@ -121,11 +129,18 @@ export default function AdminHome() {
   };
 
   const onCreate = async () => {
-    if (!newUser.username || !newUser.email) {
-      setMsg("username and email are required.");
+    setMsg("");
+    if (!newUser.username || !newUser.email || !newUser.password) {
+      setMsg("Field(s) cannot be empty.");
       return;
     }
-    if (!pwdOk(newUser.password)) {
+      if (!emailValid(newUser.email)){
+        setMsg(
+          "Email must be valid."
+        );
+        return;
+    }
+    if (!pwdValid(newUser.password)) {
       setMsg(
         "Password must be 8–10 chars, include letters, numbers, and a special character."
       );
@@ -136,10 +151,10 @@ export default function AdminHome() {
         ...newUser,
         active: !!newUser.active,
       });
+      // prepend the created row
       setRows((rs) => [created, ...rs]);
-      setAdding(false);
+      // reset the inline new row
       setNewUser(emptyNew);
-      setMsg("");
     } catch (e) {
       setMsg(e.message || "Create failed");
     }
@@ -147,123 +162,106 @@ export default function AdminHome() {
 
   return (
     <div className="p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Admin – Users</h2>
-        <button
-          className="rounded-md bg-blue-600 text-white px-3 py-2 hover:bg-blue-700"
-          onClick={() => {
-            setAdding((v) => !v);
-            setMsg("");
-          }}
-        >
-          {adding ? "Close" : "Add User"}
-        </button>
-      </div>
-
       {msg && (
         <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
           {msg}
         </div>
       )}
 
-      {/* Create row */}
-      {adding && (
-        <div className="mb-4 rounded-lg border p-3">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-            <input
-              className="rounded-md border px-2 py-1"
-              placeholder="username (display)"
-              value={newUser.username}
-              onChange={(e) => updateNew("username", e.target.value)}
-            />
-            <input
-              className="rounded-md border px-2 py-1"
-              placeholder="email"
-              value={newUser.email}
-              onChange={(e) => updateNew("email", e.target.value)}
-            />
-            <input
-              type="password"
-              className="rounded-md border px-2 py-1"
-              placeholder="password"
-              value={newUser.password}
-              onChange={(e) => updateNew("password", e.target.value)}
-            />
-            <fieldset className="rounded-md border px-2 py-1">
-              <legend className="text-xs text-gray-500 px-1">Groups</legend>
-              <div className="grid gap-1">
-                {Object.values(UserGroup).map((ug) => {
-                  const checked = newUser.usergroup.includes(ug);
-                  return (
-                    <label key={ug} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-blue-600"
-                        checked={checked}
-                        onChange={() => {
-                          const next = checked
-                            ? newUser.usergroup.filter((x) => x !== ug)
-                            : [...newUser.usergroup, ug];
-                          updateNew("usergroup", next);
-                        }}
-                      />
-                      <span className="text-sm">
-                        {USER_GROUP_LABELS[ug] ?? ug}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-blue-600"
-                checked={!!newUser.active}
-                onChange={(e) => updateNew("active", e.target.checked)}
-              />
-              <span className="text-sm">Active</span>
-            </label>
-          </div>
-
-          <div className="mt-3 flex gap-2">
-            <button
-              className="rounded-md bg-blue-600 text-white px-3 py-1 hover:bg-blue-700"
-              onClick={onCreate}
-            >
-              Create
-            </button>
-            <button
-              className="rounded-md bg-gray-200 px-3 py-1 hover:bg-gray-300"
-              onClick={() => {
-                setAdding(false);
-                setNewUser(emptyNew);
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Table */}
       <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
         <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
           <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
             <tr>
               <th className="px-6 py-3">ID</th>
               <th className="px-6 py-3">Username</th>
-              <th className="px-6 py-3">Groups</th>
+              <th className="px-6 py-3">User Group</th>
               <th className="px-6 py-3">Email</th>
               <th className="px-6 py-3">Password</th>
               <th className="px-6 py-3">Active</th>
               <th className="px-6 py-3"></th>
             </tr>
           </thead>
+
           <tbody>
+            {/* Inline create row (always first) */}
+            <tr className="bg-white dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
+              <td className="px-6 py-3 text-gray-400">—</td>
+
+              <td className="px-6 py-3">
+                <input
+                  className="w-full rounded-md border px-2 py-1 outline-none bg-white dark:bg-gray-900"
+                  value={newUser.username}
+                  onChange={(e) => updateNew("username", e.target.value)}
+                />
+              </td>
+
+              <td className="px-6 py-3">
+                                        <fieldset className="grid grid-cols-1 gap-2">
+
+                  {Object.values(UserGroup).map((ug) => {
+                    const checked = newUser.usergroup.includes(ug);
+                    return (
+                      <label key={ug} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-blue-600"
+                          checked={checked}
+                          onChange={() => {
+                            const next = checked
+                              ? newUser.usergroup.filter((x) => x !== ug)
+                              : [...newUser.usergroup, ug];
+                            updateNew("usergroup", next);
+                          }}
+                        />
+                        <span className="text-sm">
+                          {USER_GROUP_LABELS[ug] ?? ug}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
+              </td>
+
+              <td className="px-6 py-3">
+                <input
+                  className="w-full rounded-md border px-2 py-1 outline-none bg-white dark:bg-gray-900"
+                  value={newUser.email}
+                  onChange={(e) => updateNew("email", e.target.value)}
+                />
+              </td>
+
+              <td className="px-6 py-3">
+                <input
+                  type="password"
+                  className="w-full rounded-md border px-2 py-1 outline-none bg-white dark:bg-gray-900"
+                  value={newUser.password}
+                  onChange={(e) => updateNew("password", e.target.value)}
+                />
+              </td>
+
+              <td className="px-6 py-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-blue-600"
+                  checked={!!newUser.active}
+                  onChange={(e) => updateNew("active", e.target.checked)}
+                />
+              </td>
+
+              <td className="px-6 py-3">
+                <button
+                  onClick={onCreate}
+                  className="rounded-md bg-blue-600 text-white px-3 py-1 hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </td>
+            </tr>
+
+            {/* Data rows */}
             {loading ? (
               <tr>
-                <td className="px-6 py-4" colSpan={8}>
+                <td className="px-6 py-4" colSpan={7}>
                   Loading…
                 </td>
               </tr>
@@ -279,15 +277,12 @@ export default function AdminHome() {
                   >
                     <td className="px-6 py-4">{row.id}</td>
 
-
                     <td className="px-6 py-4">
                       {isEditing ? (
                         <input
                           className="w-full rounded-md border px-2 py-1 outline-none bg-white dark:bg-gray-900"
                           value={z.username}
-                          onChange={(e) =>
-                            updateDraft("username", e.target.value)
-                          }
+                          onChange={(e) => updateDraft("username", e.target.value)}
                         />
                       ) : (
                         row.username
@@ -351,10 +346,7 @@ export default function AdminHome() {
                           type="password"
                           className="w-full rounded-md border px-2 py-1 outline-none bg-white dark:bg-gray-900"
                           value={z.password || ""}
-                          onChange={(e) =>
-                            updateDraft("password", e.target.value)
-                          }
-                          placeholder="leave blank to keep"
+                          onChange={(e) => updateDraft("password", e.target.value)}
                         />
                       ) : (
                         "•".repeat(8)
@@ -374,7 +366,6 @@ export default function AdminHome() {
                           type="checkbox"
                           className="h-4 w-4 accent-blue-600"
                           checked={!!row.active}
-                          onChange={(e) => onToggleActive(row, e.target.checked)}
                         />
                       )}
                     </td>
