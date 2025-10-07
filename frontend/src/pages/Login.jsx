@@ -15,7 +15,7 @@ export default function Login() {
     setBusy(true); setMsg("");
     try {
       await login(username, password);
-      navigate("/", { replace: true });
+      navigate("/admin-home", { replace: true });
     } catch (err) {
       setMsg(err.message || "Login failed");
     } finally {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function AdminHome() {
+export default function UpdateProfile() {
 const [rows, setRows] = useState([
   {
     id: 1,

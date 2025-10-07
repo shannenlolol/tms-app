@@ -20,7 +20,7 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
-          path="/"
+          path="/admin-home"
           element={
             <PrivateRoute>
               <NavBar />
