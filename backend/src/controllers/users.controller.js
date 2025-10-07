@@ -1,5 +1,7 @@
 // Matches accounts table: id, username, password, email, active, usergroups
 import pool from "../models/db.js";
+import bcrypt from "bcrypt";
+const ROUNDS = 12; // 10–12 is common
 
 // Convert DB "usergroups" (CSV/string) <-> UI array
 const toArray = (v) =>
@@ -31,7 +33,6 @@ export async function list(_req, res, next) {
       email: r.email ?? "",
       usergroup: toArray(r.usergroups), // array for the UI
       active: !!r.active,
-      // Never send raw password to UI — keep masked client-side
     }));
     res.json(data);
   } catch (e) {
@@ -62,10 +63,12 @@ export async function create(req, res, next) {
         .send("Password must be 8–10 chars, include letters, numbers, and a special character.");
     }
 
+    const password_hash = await bcrypt.hash(password, ROUNDS);
+
     const [r] = await pool.query(
       `INSERT INTO accounts (username, password, email, active, usergroups)
        VALUES (?, ?, ?, ?, ?)`,
-      [usernameDb, password, email, active ? 1 : 0, toCSV(usergroup)]
+      [usernameDb, password_hash, email, active ? 1 : 0, toCSV(usergroup)]
     );
 
     const [[row]] = await pool.query(
@@ -113,8 +116,10 @@ export async function update(req, res, next) {
           .status(400)
           .send("Password must be 8–10 chars, include letters, numbers, and a special character.");
       }
+      const password_hash = await bcrypt.hash(password, ROUNDS);
+
       sql += `, password=?`;
-      params.push(password);
+      params.push(password_hash);
     }
 
     sql += `, usergroups=?, active=? WHERE id=?`;
