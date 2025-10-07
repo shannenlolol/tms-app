@@ -6,7 +6,7 @@ export default function useAuth() {
 
   useEffect(() => {
     // Backend returns 200 when session exists, 401 otherwise
-    fetch("/api/adminhome", { credentials: "include" })
+    fetch("/api/check", { credentials: "include" })
       .then(res => setAuthed(res.ok))
       .catch(() => setAuthed(false))
       .finally(() => setLoading(false));

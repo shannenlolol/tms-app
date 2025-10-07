@@ -1,4 +1,4 @@
-import { getHome, logout } from "../api/auth";  // <-- logout now exists
+import { logout } from "../api/auth";  // <-- logout now exists
 
 export default function NavBar() {
   return (

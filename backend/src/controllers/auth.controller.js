@@ -59,10 +59,8 @@ export const login = async (req, res, next) => {
   }
 };
 
-/**
- * GET /adminhome (example protected endpoint)
- */
-export const adminhome = (req, res) => {
+
+export const check = (req, res) => {
   if (req.session?.loggedin) {
     return res.json({
       ok: true,

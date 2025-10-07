@@ -13,9 +13,9 @@ export async function login(username, password) {
   return data; // { ok:true, username }
 }
 
-/** GET /adminhome — verify session */
-export async function getHome() {
-  const res = await api("/adminhome");
+/** GET /check — verify session */
+export async function verify() {
+  const res = await api("/check");
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || "Not authorised");
   return data; // { ok:true, username, message }
