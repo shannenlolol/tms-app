@@ -1,24 +1,28 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { login } from "../api/auth";
-import NavBar from "./NavBar";
+// src/pages/Login.jsx
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 export default function Login() {
-  const navigate = useNavigate();
+  const nav = useNavigate();
+  const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
   async function onSubmit(e) {
     e.preventDefault();
-    setBusy(true); setMsg("");
+    setErr("");
+        setBusy(true); setMsg("");
     try {
-      await login(username, password);
-      navigate("/admin-home", { replace: true });
-    } catch (err) {
-      setMsg(err.message || "Login failed");
-    } finally {
+      await login(username.trim(), password);
+      nav("/admin", { replace: true });
+    } catch (e) {
+      setErr(e?.response?.data?.message || "Login failed");
+       setMsg(err.message || "Login failed");
+    }finally {
       setBusy(false);
     }
   }

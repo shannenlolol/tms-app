@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getUsers, createUser, updateUser, toggleActive } from "../api/users";
+import { getUserGroups, createUserGroup } from "../api/groups";
+import { useAuth } from "../hooks/useAuth";
 
 // Helper to sort rows
 const sortByIdAsc = (arr) =>
@@ -20,13 +22,7 @@ const re =
 
 const emailValid = (s) => typeof s === "string" && re.test(s);
 
-// --- API helper: fetch full-name groups from backend ---
-async function getUserGroups() {
-  const res = await fetch("/api/user-groups", { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to load user groups");
-  // Returns: ["Admin","Dev Team","Project Lead","Project Manager"]
-  return res.json();
-}
+
 
 /** Small pill/tag component */
 function GroupTag({ children, onRemove }) {
@@ -48,22 +44,6 @@ function GroupTag({ children, onRemove }) {
   );
 }
 
-// --- API helper: create a new full-name user group on backend ---
-async function createUserGroup(name) {
-  const res = await fetch("/api/user-groups", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(t || "Failed to create user group");
-  }
-  // Returns created name (e.g. "Project Lead")
-  const { name: createdName } = await res.json();
-  return createdName || name;
-}
 
 /** Dropdown multi-select with checkbox list + removable tags in the control */
 function UserGroupPicker({ value = [], onChange, options, placeholder = "Select" }) {
@@ -155,6 +135,7 @@ function UserGroupPicker({ value = [], onChange, options, placeholder = "Select"
 
 
 export default function AdminHome() {
+  const { ready, isAuthenticated } = useAuth();
   const [rows, setRows] = useState([]);
   const [groupOptions, setGroupOptions] = useState([]); // ["Admin","Dev Team",...]
   const [loading, setLoading] = useState(true);
@@ -179,18 +160,20 @@ export default function AdminHome() {
   const [newUser, setNewUser] = useState(emptyNew);
 
   useEffect(() => {
+    if (!ready || !isAuthenticated) return; // wait for JWT
     (async () => {
       try {
+        setLoading(true);
         const [users, groups] = await Promise.all([getUsers(), getUserGroups()]);
         setRows(sortByIdAsc(users));
-        setGroupOptions(groups); // array of full names
+        setGroupOptions(groups);
       } catch (e) {
-        setMsg(e.message || "Failed to load users");
-      } finally {
+        setMsg(e?.response?.data?.message || e.message || "Failed to load users");
+     } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [ready, isAuthenticated]);
 
   const startEdit = (row) => {
     setEditingId(row.id);

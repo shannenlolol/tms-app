@@ -1,9 +1,77 @@
-// frontend/src/api/client.js
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+// src/api/client.js
+import axios from "axios";
 
-export async function api(path, opts = {}) {
-  return fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    ...opts,
+/** In-memory access token */
+let accessToken = null;
+export const setAccessToken = (t) => { accessToken = t || null; };
+export const getAccessToken = () => accessToken;
+
+/** One shared Axios instance */
+const http = axios.create({
+  baseURL: "https://localhost:3000/api",
+  withCredentials: true, // send/receive refresh cookie
+});
+
+// Attach Authorization
+http.interceptors.request.use((config) => {
+  if (!config.headers) config.headers = {};
+  const at = getAccessToken();
+  if (at) config.headers["Authorization"] = `Bearer ${at}`;
+  return config;
+});
+
+// 401 -> try refresh once, then retry original
+let isRefreshing = false;
+let queue = [];
+
+function flushQueue(newToken) {
+  queue.forEach(({ resolve, reject, original }) => {
+    if (newToken) {
+      original.headers["Authorization"] = `Bearer ${newToken}`;
+      http(original).then(resolve).catch(reject);
+    } else {
+      reject(new Error("Unauthorised"));
+    }
   });
+  queue = [];
 }
+
+http.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const status = error?.response?.status;
+    const original = error.config || {};
+    if (status !== 401 || original._retry) {
+      return Promise.reject(error);
+    }
+    original._retry = true;
+
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => queue.push({ resolve, reject, original }));
+    }
+
+    try {
+      isRefreshing = true;
+      const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
+        withCredentials: true,
+      });
+      const newToken = data?.accessToken || null;
+      setAccessToken(newToken);
+      flushQueue(newToken);
+
+      if (newToken) {
+        original.headers["Authorization"] = `Bearer ${newToken}`;
+        return http(original);
+      }
+      return Promise.reject(error);
+    } catch (e) {
+      setAccessToken(null);
+      flushQueue(null);
+      return Promise.reject(e);
+    } finally {
+      isRefreshing = false;
+    }
+  }
+);
+
+export default http;

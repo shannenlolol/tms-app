@@ -1,8 +1,9 @@
 // backend/src/app.js
 import express from "express";
-import session from "express-session";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import "dotenv/config";
+import { ensureAuth } from "./middleware/jwt.js"; // adjust path if different
 
 import authRoutes from "./routes/auth.routes.js";
 import usersRoutes from "./routes/users.routes.js";
@@ -21,6 +22,7 @@ if (NODE_ENV === "production") {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use(
   cors({
@@ -31,26 +33,13 @@ app.use(
 
 // Secure cookies in HTTPS; SameSite depends on whether origins differ
 const crossSite = true; // frontend on different origin (Vite dev) -> cross-site
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "change_me",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      // if frontend is on a different origin, you MUST use SameSite 'none' + secure cookies
-      sameSite: crossSite ? "none" : "lax",
-      secure: crossSite ? true : (NODE_ENV === "production"), // secure cookies on HTTPS
-      maxAge: 30 * 60 * 1000, // 30 mins
-    },
-  })
-);
+
 
 // All APIs under /api
 app.use("/api", authRoutes);
-app.use("/api", usersRoutes);
-app.use("/api/user-groups", groupRoutes);
-app.use("/api/users", selfRoutes); // exposes /api/users/current (GET, PUT)
+app.use("/api", ensureAuth, usersRoutes); 
+app.use("/api/user-groups", ensureAuth, groupRoutes);
+app.use("/api/users", ensureAuth, selfRoutes); // exposes /api/users/current (GET, PUT)
 
 // 404
 app.use((req, res) => res.status(404).json({ error: "Not found" }));

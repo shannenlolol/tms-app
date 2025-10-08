@@ -1,25 +1,23 @@
+// backend/src/controllers/auth.controller.js
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import pool from "../models/db.js";
+import { makeAccessToken, makeRefreshToken, setRefreshCookie, clearRefreshCookie } from "../middleware/jwt.js";
 
 // tiny helper: DB CSV/string -> array
-const toArray = (v) =>
-  String(v ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+const toArray = (v) => String(v ?? "").split(",").map(s => s.trim()).filter(Boolean);
 
+/** POST /api/auth  { username, password } */
 export const login = async (req, res, next) => {
   try {
-    const username = (req.body?.username ?? req.query?.username ?? "").trim();
-    const password = req.body?.password ?? req.query?.password;
+    const username = (req.body?.username ?? "").trim();
+    const password = req.body?.password ?? "";
 
     if (!username || !password) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "Please enter Username and Password!" });
+      return res.status(400).json({ ok: false, message: "Please enter Username and Password!" });
     }
 
-    // 1) Fetch active user
+    // Accept both schemas: password or password_hash
     const [rows] = await pool.query(
       `SELECT id, username, password AS password_hash, active, usergroups
          FROM accounts
@@ -27,45 +25,26 @@ export const login = async (req, res, next) => {
         LIMIT 1`,
       [username]
     );
-
     if (rows.length === 0) {
-      return res
-        .status(401)
-        .json({ ok: false, message: "Incorrect Username and/or Password!" });
+      return res.status(401).json({ ok: false, message: "Incorrect Username and/or Password!" });
     }
 
     const user = rows[0];
-
-    // 2) Verify password against bcrypt hash
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
-      return res
-        .status(401)
-        .json({ ok: false, message: "Incorrect Username and/or Password!" });
+      return res.status(401).json({ ok: false, message: "Incorrect Username and/or Password!" });
     }
 
-    // 3) Derive groups/role
+    const accessToken = makeAccessToken({ id: user.id, username: user.username });
+    const refreshToken = makeRefreshToken({ id: user.id });
+
+    setRefreshCookie(res, refreshToken);
     const groups = toArray(user.usergroups);
-    const isAdmin = groups.includes("Admin");
 
-    // 4) Establish session (regenerate = fix session fixation)
-    req.session.regenerate?.((err) => {
-      if (err) {
-        console.error("session regenerate error:", err);
-        // fall back to using existing session
-      }
-
-      req.session.loggedin = true;
-      req.session.userId = user.id;
-      req.session.username = user.username;
-      req.session.groups = groups;
-      req.session.isAdmin = isAdmin;
-      return res.json({
-        ok: true,
-        userId: user.id,
-        username: user.username,
-        isAdmin: isAdmin,
-      });
+    return res.json({
+      ok: true,
+      accessToken,
+      user: { id: user.id, username: user.username, groups, isAdmin: groups.includes("Admin") },
     });
   } catch (err) {
     console.error("Auth login error:", err);
@@ -73,24 +52,27 @@ export const login = async (req, res, next) => {
   }
 };
 
-
-export const check = (req, res) => {
-  if (req.session?.loggedin) {
-    return res.json({
-      ok: true,
-      username: req.session.username,
-      isAdmin: req.session?.isAdmin,
-      message: `Welcome back, ${req.session.username}!`,
-    });
+/** GET /api/auth/refresh  (uses HttpOnly refresh cookie) */
+export const refresh = (req, res) => {
+  const token = req.cookies?.rt;
+  if (!token) return res.status(401).json({ ok: false, message: "Missing refresh token" });
+  try {
+    const payload = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
+    const accessToken = makeAccessToken({ id: payload.sub, username: payload.username });
+    return res.json({ ok: true, accessToken });
+  } catch {
+    return res.status(401).json({ ok: false, message: "Invalid or expired refresh token" });
   }
-  return res
-    .status(401)
-    .json({ ok: false, message: "Please login to view this page!" });
 };
 
-/**
- * POST /logout
- */
-export const logout = (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
+/** POST /api/logout */
+export const logout = (_req, res) => {
+  clearRefreshCookie(res);
+  res.json({ ok: true });
+};
+
+/** GET /api/check  (optional) */
+export const check = (req, res) => {
+  // With JWT, check should be behind ensureAuth; simply echoes back
+  return res.json({ ok: true, user: req.user });
 };
