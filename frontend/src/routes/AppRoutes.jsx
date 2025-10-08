@@ -6,7 +6,9 @@ import AdminHome from "../pages/AdminHome.jsx";
 import NotFound from "../pages/NotFound.jsx";
 import useAuth from "../hooks/useAuth.js";
 import NavBar from "../pages/NavBar.jsx";
+import AdminNavBar from "../pages/AdminNavBar.jsx";
 import UpdateProfile from "../pages/UpdateProfile.jsx";
+import AdminUpdateProfile from "../pages/AdminUpdateProfile.jsx";
 
 function PrivateRoute({ children, requireAdmin = false }) {
   const { isAuthed, isAdmin, loading } = useAuth();
@@ -46,7 +48,7 @@ export default function AppRoutes() {
           path="/admin-home"
           element={
             <PrivateRoute requireAdmin>
-              <NavBar />
+              <AdminNavBar />
               <AdminHome />
             </PrivateRoute>
           }
@@ -62,6 +64,15 @@ export default function AppRoutes() {
           }
         />
 
+        <Route
+          path="/admin-update-profile"
+          element={
+            <PrivateRoute requireAdmin>
+              <AdminNavBar />
+              <AdminUpdateProfile />
+            </PrivateRoute>
+          }
+        />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

@@ -6,6 +6,8 @@ import "dotenv/config";
 
 import authRoutes from "./routes/auth.routes.js";
 import usersRoutes from "./routes/users.routes.js";
+import groupRoutes from "./routes/groups.routes.js";
+import selfRoutes from "./routes/self.routes.js";
 
 export const app = express();
 
@@ -47,6 +49,8 @@ app.use(
 // All APIs under /api
 app.use("/api", authRoutes);
 app.use("/api", usersRoutes);
+app.use("/api/user-groups", groupRoutes);
+app.use("/api/users", selfRoutes); // exposes /api/users/current (GET, PUT)
 
 // 404
 app.use((req, res) => res.status(404).json({ error: "Not found" }));

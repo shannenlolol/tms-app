@@ -1,13 +1,13 @@
 import { logout } from "../api/auth";  // <-- logout now exists
 
-export default function NavBar() {
+export default function AdminNavBar() {
   return (
     <nav className="bg-white border-gray-200 dark:bg-gray-900 shadow-md mb-8">
       <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
         <a href="/admin-home" className="flex items-center space-x-3 rtl:space-x-reverse">
           {/* <img src="https://flowbite.com/docs/images/logo.svg" className="h-8" alt="Flowbite Logo" /> */}
           <span className="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
-            Task Management System
+            User Managment System
           </span>
         </a>
 
@@ -41,7 +41,7 @@ export default function NavBar() {
                           dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
             <li>
               <button
-                onClick={() => (window.location.href = "/update-profile")}
+                onClick={() => (window.location.href = "/admin-update-profile")}
                 className="rounded-md bg-gray-800 text-white px-3 py-1.5 hover:bg-black"
               >
                 Update Profile

@@ -5,15 +5,6 @@ import { getUsers, createUser, updateUser, toggleActive } from "../api/users";
 const sortByIdAsc = (arr) =>
   [...arr].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
 
-/** JS "enum" + labels **/
-const UserGroup = Object.freeze({ PL: "PL", PM: "PM", DEV: "DEV", AD: "AD" });
-const USER_GROUP_LABELS = {
-  [UserGroup.PL]: "Project Lead",
-  [UserGroup.PM]: "Project Manager",
-  [UserGroup.DEV]: "Dev Team",
-  [UserGroup.AD]: "Admin",
-};
-
 // same rule as backend
 const pwdValid = (s) =>
   typeof s === "string" &&
@@ -24,17 +15,151 @@ const pwdValid = (s) =>
   /[^A-Za-z0-9]/.test(s);
 
 // email regex check
-const re = /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])?@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
+const re =
+  /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])?@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
 
-const emailValid = (s) =>
-  typeof s === "string" &&
-  re.test(s);
+const emailValid = (s) => typeof s === "string" && re.test(s);
+
+// --- API helper: fetch full-name groups from backend ---
+async function getUserGroups() {
+  const res = await fetch("/api/user-groups", { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to load user groups");
+  // Returns: ["Admin","Dev Team","Project Lead","Project Manager"]
+  return res.json();
+}
+
+/** Small pill/tag component */
+function GroupTag({ children, onRemove }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs">
+      {children}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="ml-1 rounded-full px-1 hover:bg-blue-200"
+          aria-label="Remove group"
+          title="Remove group"
+        >
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+// --- API helper: create a new full-name user group on backend ---
+async function createUserGroup(name) {
+  const res = await fetch("/api/user-groups", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(t || "Failed to create user group");
+  }
+  // Returns created name (e.g. "Project Lead")
+  const { name: createdName } = await res.json();
+  return createdName || name;
+}
+
+/** Dropdown multi-select with checkbox list + removable tags in the control */
+function UserGroupPicker({ value = [], onChange, options, placeholder = "Select" }) {
+  const [open, setOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!anchorEl) return;
+      if (!anchorEl.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [anchorEl]);
+
+  const toggle = (name) => {
+    if (value.includes(name)) {
+      onChange(value.filter((v) => v !== name));
+    } else {
+      onChange([...value, name]);
+    }
+  };
+
+  const clearAll = () => onChange([]);
+
+  return (
+    <div className="relative" ref={setAnchorEl}>
+      {/* Control */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full min-h-[34px] rounded-md border bg-white dark:bg-gray-900 px-2 py-1 text-left focus:outline-none focus:ring flex items-center gap-2 flex-wrap"
+      >
+        {value.length === 0 ? (
+          <span className="text-gray-400">{placeholder}</span>
+        ) : (
+          <>
+            {value.map((name) => (
+              <span
+                key={name}
+                className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs"
+              >
+                {name}
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange(value.filter((v) => v !== name));
+                  }}
+                  className="cursor-pointer rounded-full px-1 hover:bg-blue-200"
+                  aria-label={`Remove ${name}`}
+                  title={`Remove ${name}`}
+                >
+                  ×
+                </span>
+              </span>
+            ))}
+          </>
+        )}
+        <span className="ml-auto text-gray-400">▾</span>
+      </button>
+
+      {/* Menu */}
+      {open && (
+        <div className="absolute z-20 mt-1 w-[18rem] max-w-[80vw] rounded-md border bg-white dark:bg-gray-900 shadow-lg">
+          <ul className="max-h-60 overflow-auto py-1">
+            {options.map((name) => {
+              const checked = value.includes(name);
+              return (
+                <li key={name}>
+                  <label className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-blue-600"
+                      checked={checked}
+                      onChange={() => toggle(name)}
+                    />
+                    <span className="text-sm">{name}</span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 
 export default function AdminHome() {
   const [rows, setRows] = useState([]);
+  const [groupOptions, setGroupOptions] = useState([]); // ["Admin","Dev Team",...]
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [successmsg, setSuccessMsg] = useState("");
 
   // edit state
   const [editingId, setEditingId] = useState(null);
@@ -56,8 +181,9 @@ export default function AdminHome() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await getUsers();
-        setRows(sortByIdAsc(data));
+        const [users, groups] = await Promise.all([getUsers(), getUserGroups()]);
+        setRows(sortByIdAsc(users));
+        setGroupOptions(groups); // array of full names
       } catch (e) {
         setMsg(e.message || "Failed to load users");
       } finally {
@@ -86,21 +212,18 @@ export default function AdminHome() {
   };
 
   const updateDraft = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
-  const updateNew = (key, value) =>
-    setNewUser((u) => ({ ...u, [key]: value }));
+  const updateNew = (key, value) => setNewUser((u) => ({ ...u, [key]: value }));
 
   const saveEdit = async () => {
     if (!draft) return;
     const payload = {
       username: draft.username,
-      usergroup: draft.usergroup,
+      usergroup: draft.usergroup, // array of full names
       active: !!draft.active,
     };
     if (draft.email) {
-      if (!emailValid(draft.email)){
-        setMsg(
-          "Email must be valid."
-        );
+      if (!emailValid(draft.email)) {
+        setMsg("Email must be valid.");
         return;
       }
       payload.email = draft.email;
@@ -138,11 +261,9 @@ export default function AdminHome() {
       setMsg("Field(s) cannot be empty.");
       return;
     }
-      if (!emailValid(newUser.email)){
-        setMsg(
-          "Email must be valid."
-        );
-        return;
+    if (!emailValid(newUser.email)) {
+      setMsg("Email must be valid.");
+      return;
     }
     if (!pwdValid(newUser.password)) {
       setMsg(
@@ -165,11 +286,38 @@ export default function AdminHome() {
     }
   };
 
+const onAddUserGroup = async () => {
+  const name = (prompt("Enter new user group name:") || "").trim();
+  if (!name) return;
+
+  // Prevent dupes (case-insensitive)
+  const exists = groupOptions.some((g) => g.toLowerCase() === name.toLowerCase());
+  if (exists) {
+    setMsg("That user group already exists.");
+    return;
+  }
+
+  try {
+    const createdName = await createUserGroup(name);
+    setGroupOptions((opts) =>
+      [...opts, createdName].sort((a, b) => a.localeCompare(b))
+    );
+    setSuccessMsg(`“${createdName}” added.`);
+  } catch (e) {
+    setMsg(e.message || "Failed to add user group");
+  }
+};
+
   return (
     <div className="p-4">
       {msg && (
         <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
           {msg}
+        </div>
+      )}
+      {successmsg && (
+        <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700">
+          {successmsg}
         </div>
       )}
 
@@ -179,7 +327,19 @@ export default function AdminHome() {
             <tr>
               <th className="px-6 py-3">ID</th>
               <th className="px-6 py-3">Username</th>
-              <th className="px-6 py-3">User Group</th>
+                  <th className="px-6 py-3">
+      <div className="flex items-center gap-2">
+        <span>User Group</span>
+        <button
+          type="button"
+          onClick={onAddUserGroup}
+          className="rounded-md bg-blue-600 text-white px-2 py-1 text-[11px] hover:bg-blue-700"
+          title="Create a new user group"
+        >
+          + New
+        </button>
+      </div>
+    </th>
               <th className="px-6 py-3">Email</th>
               <th className="px-6 py-3">Password</th>
               <th className="px-6 py-3">Active</th>
@@ -201,30 +361,11 @@ export default function AdminHome() {
               </td>
 
               <td className="px-6 py-3">
-                                        <fieldset className="grid grid-cols-1 gap-2">
-
-                  {Object.values(UserGroup).map((ug) => {
-                    const checked = newUser.usergroup.includes(ug);
-                    return (
-                      <label key={ug} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-blue-600"
-                          checked={checked}
-                          onChange={() => {
-                            const next = checked
-                              ? newUser.usergroup.filter((x) => x !== ug)
-                              : [...newUser.usergroup, ug];
-                            updateNew("usergroup", next);
-                          }}
-                        />
-                        <span className="text-sm">
-                          {USER_GROUP_LABELS[ug] ?? ug}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </fieldset>
+                <UserGroupPicker
+                  value={newUser.usergroup}
+                  onChange={(next) => updateNew("usergroup", next)}
+                  options={groupOptions}
+                />
               </td>
 
               <td className="px-6 py-3">
@@ -296,38 +437,15 @@ export default function AdminHome() {
 
                     <td className="px-6 py-4">
                       {isEditing ? (
-                        <fieldset className="grid grid-cols-1 gap-2">
-                          {Object.values(UserGroup).map((ug) => {
-                            const checked = (z.usergroup || []).includes(ug);
-                            return (
-                              <label key={ug} className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 accent-blue-600"
-                                  checked={checked}
-                                  onChange={() => {
-                                    const next = checked
-                                      ? (z.usergroup || []).filter((x) => x !== ug)
-                                      : [...(z.usergroup || []), ug];
-                                    updateDraft("usergroup", next);
-                                  }}
-                                />
-                                <span className="text-sm">
-                                  {USER_GROUP_LABELS[ug]}
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </fieldset>
+                        <UserGroupPicker
+                          value={z.usergroup || []}
+                          onChange={(next) => updateDraft("usergroup", next)}
+                          options={groupOptions}
+                        />
                       ) : (
                         <div className="flex flex-wrap gap-1">
-                          {(row.usergroup || []).map((ug) => (
-                            <span
-                              key={ug}
-                              className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs"
-                            >
-                              {USER_GROUP_LABELS[ug] ?? ug}
-                            </span>
+                          {(row.usergroup || []).map((name) => (
+                            <GroupTag key={name}>{name}</GroupTag>
                           ))}
                         </div>
                       )}
@@ -371,6 +489,7 @@ export default function AdminHome() {
                           type="checkbox"
                           className="h-4 w-4 accent-blue-600"
                           checked={!!row.active}
+                          onChange={(e) => onToggleActive(row, e.target.checked)}
                         />
                       )}
                     </td>

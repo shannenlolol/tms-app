@@ -46,7 +46,7 @@ export const login = async (req, res, next) => {
 
     // 3) Derive groups/role
     const groups = toArray(user.usergroups);
-    const isAdmin = groups.includes("AD");
+    const isAdmin = groups.includes("Admin");
 
     // 4) Establish session (regenerate = fix session fixation)
     req.session.regenerate?.((err) => {
