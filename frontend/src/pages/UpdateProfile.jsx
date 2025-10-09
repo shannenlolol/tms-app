@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { getCurrentUser, updateCurrentUser } from "../api/users";
 
-// ---- validators (same as your admin page) ----
+/* validators (same as Admin) */
 const pwdValid = (s) =>
   typeof s === "string" &&
   s.length >= 8 &&
@@ -15,13 +15,18 @@ const re =
   /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])?@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
 const emailValid = (s) => typeof s === "string" && re.test(s);
 
+const BTN = "w-32 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center";
+const INPUT =
+  "w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white " +
+  "focus:border-indigo-400 focus:ring focus:ring-indigo-200/50";
+
 function normaliseGroups(arrOrCsv) {
   return Array.isArray(arrOrCsv)
     ? arrOrCsv
     : String(arrOrCsv || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
 }
 
 function GroupTag({ children }) {
@@ -38,40 +43,39 @@ export default function UpdateProfile() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
-  const [successmsg, setSuccessMsg] = useState("");
+  const [ok, setOk] = useState("");
 
-    useEffect(() => {
-  if (!msg) return;
-  const t = setTimeout(() => setMsg(""), 5000);
-  return () => clearTimeout(t); // cleanup if msg changes/unmounts
-}, [msg]);
-
-useEffect(() => {
-  if (!successmsg) return;
-  const t = setTimeout(() => setSuccessMsg(""), 5000);
-  return () => clearTimeout(t);
-}, [successmsg]);
-
-
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({
-    email: "",
-    currentPassword: "",
-    newPassword: "",
-  });
+  // directly editable draft
+  const [email, setEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Load current profile once auth is ready
+  /* auto-dismiss banners */
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(() => setMsg(""), 5000);
+    return () => clearTimeout(t);
+  }, [msg]);
+  useEffect(() => {
+    if (!ok) return;
+    const t = setTimeout(() => setOk(""), 5000);
+    return () => clearTimeout(t);
+  }, [ok]);
+
+  /* load profile */
   useEffect(() => {
     if (!ready || !isAuthenticated) return;
     (async () => {
-      setMsg("");
       setLoading(true);
+      setMsg("");
       try {
-        const me = await getCurrentUser(); // Axios client (Bearer + auto-refresh)
+        const me = await getCurrentUser();
         const normalised = { ...me, usergroup: normaliseGroups(me.usergroup) };
         setProfile(normalised);
-        setDraft({ email: normalised.email || "", currentPassword: "", newPassword: "" });
+        setEmail(normalised.email || "");
+        setCurrentPassword("");
+        setNewPassword("");
       } catch (e) {
         setMsg(e?.response?.data?.message || e.message || "Failed to load profile");
       } finally {
@@ -80,95 +84,80 @@ useEffect(() => {
     })();
   }, [ready, isAuthenticated]);
 
-  const startEdit = () => {
-    if (!profile) return;
-    setDraft({ email: profile.email || "", currentPassword: "", newPassword: "" });
-    setEditing(true);
-    setMsg("");
-  };
-
-  const cancelEdit = () => {
-    setEditing(false);
-    setDraft((d) => ({ ...d, currentPassword: "", newPassword: "" }));
-    setMsg("");
-  };
-
-  const updateDraftField = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
-
-  const saveEdit = async () => {
+  async function onSave() {
     if (!profile) return;
     setMsg("");
+    setOk("");
+
+    const emailChanged = email.trim() !== (profile.email || "");
+    const changingPassword = (currentPassword || "").length > 0 || (newPassword || "").length > 0;
 
     const payload = {};
-    const emailChanged = draft.email.trim() !== (profile.email || "");
-    const passwordChanging =
-      (draft.newPassword || "").length > 0 || (draft.currentPassword || "").length > 0;
 
-    // Validate email (only if changed)
+    // Email change allowed alone
     if (emailChanged) {
-      if (!emailValid(draft.email.trim())) {
+      if (!emailValid(email.trim())) {
         setMsg("Email must be valid.");
         return;
       }
-      payload.email = draft.email.trim();
+      payload.email = email.trim();
     }
 
-    // Validate password change
-    if (passwordChanging) {
-      if (!draft.currentPassword) {
+    // Password change requires both fields and strong new password
+    if (changingPassword) {
+      if (!currentPassword) {
         setMsg("Please enter your current password.");
         return;
       }
-      if (!draft.newPassword) {
+      if (!newPassword) {
         setMsg("Please enter a new password.");
         return;
       }
-      if (!pwdValid(draft.newPassword)) {
+      if (!pwdValid(newPassword)) {
         setMsg("New password must be 8–10 chars and include letters, numbers, and a special character.");
         return;
       }
-      payload.currentPassword = draft.currentPassword;
-      payload.newPassword = draft.newPassword;
+      payload.currentPassword = currentPassword;
+      payload.newPassword = newPassword;
     }
 
-    if (!emailChanged && !passwordChanging) {
+    if (!emailChanged && !changingPassword) {
       setMsg("No changes to save.");
       return;
     }
 
-
     try {
+      setSaving(true);
       const updated = await updateCurrentUser(payload);
-      setProfile(updated);
-      setEditing(false);
-      setDraft({ email: updated.email || "", currentPassword: "", newPassword: "" });
-      setSuccessMsg("Profile updated.");           // <-- don’t accidentally use an undefined variable
+      setProfile({ ...updated, usergroup: normaliseGroups(updated.usergroup) });
+      setOk("Profile updated.");
+      // clear password fields after successful update
+      setCurrentPassword("");
+      setNewPassword("");
     } catch (e) {
-      console.error("Update failed:", e?.response?.status, e?.response?.data);
       setMsg(e?.response?.data?.message || e.message || "Update failed");
+    } finally {
+      setSaving(false);
     }
-
-  };
+  }
 
   return (
     <div className="p-4">
       {msg && (
         <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800">
           {msg}
-        
         </div>
       )}
-
-            {successmsg && (
+      {ok && (
         <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-800">
-          {successmsg}
-        
+          {ok}
         </div>
       )}
 
-      <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
-        <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
-          <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+      {/* same wrapper rules as Admin: no inner scroll clipping */}
+      <div className="relative shadow-md sm:rounded-lg overflow-visible">
+        <table className="w-full text-sm text-left text-gray-700">
+          <thead className="text-xs uppercase bg-gray-50">
             <tr>
               <th className="px-6 py-3">Username</th>
               <th className="px-6 py-3">User Group</th>
@@ -182,16 +171,15 @@ useEffect(() => {
           <tbody>
             {(!ready || loading) ? (
               <tr>
-                <td className="px-6 py-4" colSpan={7}>
-                  Loading…
-                </td>
+                <td className="px-6 py-4" colSpan={6}>Loading…</td>
               </tr>
             ) : profile ? (
-              <tr className="odd:bg-white odd:dark:bg-gray-900 even:bg-gray-50 even:dark:bg-gray-800 border-b dark:border-gray-700 border-gray-200">
-                {/* Username (read-only) */}
+              // match Admin row colours: solid white row
+              <tr className="bg-white border-b border-gray-200">
+                {/* Username (read only) */}
                 <td className="px-6 py-4">{profile.username}</td>
 
-                {/* Groups (read-only) */}
+                {/* User group (read only) */}
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-1">
                     {(profile.usergroup || []).map((g) => (
@@ -200,82 +188,47 @@ useEffect(() => {
                   </div>
                 </td>
 
-                {/* Email (editable) */}
+                {/* Email - directly editable */}
                 <td className="px-6 py-4">
-                  {editing ? (
-                    <input
-                      className="w-full rounded-md border px-2 py-1 outline-none focus:ring focus:border-blue-500 bg-white dark:bg-gray-900"
-                      value={draft.email}
-                      onChange={(e) => updateDraftField("email", e.target.value)}
-                    />
-                  ) : (
-                    profile.email || ""
-                  )}
+                  <input
+                    className={INPUT}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
                 </td>
 
-                {/* Current password (only if changing password) */}
+                {/* Current password */}
                 <td className="px-6 py-4">
-                  {editing ? (
-                    <input
-                      type="password"
-                      className="w-full rounded-md border px-2 py-1 outline-none focus:ring focus:border-blue-500 bg-white dark:bg-gray-900"
-                      value={draft.currentPassword}
-                      onChange={(e) => updateDraftField("currentPassword", e.target.value)}
-                    />
-                  ) : (
-                    "•".repeat(8)
-                  )}
+                  <input
+                    type="password"
+                    className={INPUT}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="*********"
+                  />
                 </td>
 
                 {/* New password */}
                 <td className="px-6 py-4">
-                  {editing ? (
-                    <input
-                      type="password"
-                      className="w-full rounded-md border px-2 py-1 outline-none focus:ring focus:border-blue-500 bg-white dark:bg-gray-900"
-                      value={draft.newPassword}
-                      onChange={(e) => updateDraftField("newPassword", e.target.value)}
-                    />
-                  ) : (
-                    "•".repeat(8)
-                  )}
+                  <input
+                    type="password"
+                    className={INPUT}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="*********"
+                  />
                 </td>
 
-
-                {/* Actions */}
+                {/* Save */}
                 <td className="px-6 py-4">
-                  {editing ? (
-                    <div className="flex flex-col gap-2">
-                      <button
-                        onClick={saveEdit}
-                        disabled={saving}
-                        className="rounded-md bg-blue-600 text-white px-3 py-1 hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {saving ? "Saving…" : "Save"}
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        disabled={saving}
-                        className="rounded-md bg-gray-200 text-gray-800 px-3 py-1 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={startEdit}
-                      className="font-medium text-blue-600 hover:underline px-2 py-1 rounded"
-                    >
-                      Edit
-                    </button>
-                  )}
+                  <button onClick={onSave} disabled={saving} className={BTN}>
+                    {saving ? "Saving…" : "Save"}
+                  </button>
                 </td>
               </tr>
             ) : (
               <tr>
-                <td className="px-6 py-4" colSpan={7}>
-                  No profile found.
-                </td>
+                <td className="px-6 py-4" colSpan={6}>No profile found.</td>
               </tr>
             )}
           </tbody>

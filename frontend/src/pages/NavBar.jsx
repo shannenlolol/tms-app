@@ -1,63 +1,98 @@
-import { logout } from "../api/auth";  // <-- logout now exists
-import { Link, useNavigate, NavLink } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { logout } from "../api/auth";
 
 export default function NavBar() {
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  // Close on click outside
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!open) return;
+      const t = e.target;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function onEsc(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  // Shared menu item styles
+  const itemCls =
+    "w-full text-left px-4 py-3 text-gray-900 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none rounded-md";
+
   return (
-    <nav className="bg-white border-gray-200 dark:bg-gray-900 shadow-md mb-8">
-      <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
-        <Link to="/" className="flex items-center space-x-3 rtl:space-x-reverse">
-          <span className="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
-            Task Management System
-          </span>
+    <nav className="bg-white border-gray-200 shadow-md mb-8">
+      <div className="max-w-screen-xl flex items-center justify-between mx-auto p-4">
+        <Link to="/" className="flex items-center">
+          <span className="self-center text-2xl font-semibold">Task Management System</span>
         </Link>
 
-        <button
-          data-collapse-toggle="navbar-default"
-          type="button"
-          className="inline-flex items-center p-2 w-10 h-10 justify-center text-sm text-gray-500 rounded-lg md:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600"
-          aria-controls="navbar-default"
-          aria-expanded="false"
-        >
-          <svg
-            className="w-5 h-5"
-            aria-hidden="true"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 17 14"
-          >
-            <path
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M1 1h15M1 7h15M1 13h15"
-            />
-          </svg>
-        </button>
+        {/* User avatar / trigger */}
+        <div className="relative">
 
-        <div className="hidden w-full md:block md:w-auto" id="navbar-default">
-          <ul className="font-medium flex flex-col p-4 md:p-0 mt-4 border border-gray-100 rounded-lg bg-gray-50
-                          md:flex-row md:space-x-4 rtl:space-x-reverse md:mt-0 md:border-0 md:bg-white
-                          dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
-            <li>
-              <button
-                type="button" // prevent form submits reloading the page
-                onClick={() => navigate("/profile")}
-                className="rounded-md bg-gray-800 text-white px-3 py-1.5 hover:bg-black"
-              >
-                Update Profile
-              </button>
-            </li>
-            <li>
-              <button
-                onClick={() => logout().then(() => navigate("/login"))}
-                className="rounded-md bg-gray-800 text-white px-3 py-1.5 hover:bg-black"
-              >
-                Logout
-              </button>
-            </li>
-          </ul>
+<button
+  ref={btnRef}
+  type="button"
+  onClick={() => setOpen(v => !v)}
+  className="avatar-btn inline-flex h-14 w-20 items-center justify-center
+             rounded-full overflow-hidden bg-transparent
+             border-none outline-none shadow-none
+             focus:outline-none focus:ring-0"
+>
+  <img
+    src="/user_icon.png"
+    className="h-full w-full object-contain select-none pointer-events-none"
+    draggable={false}
+  />
+</button>
+
+          {/* Dropdown menu */}
+{open && (
+  <div
+    ref={menuRef}
+    role="menu"
+    className="absolute right-0 w-32 rounded-md border border-gray-200 bg-white shadow-xl z-50"
+  >
+    <ul className="py-1 text-sm text-gray-800">
+      <li>
+        <button
+          role="menuitem"
+          onClick={() => {
+            setOpen(false);
+            navigate("/profile");
+          }}
+          className={`btn-alt w-full py-2 text-right hover:bg-gray-50 focus:bg-gray-50 focus:outline-none`}
+        >
+          Update Profile
+        </button>
+      </li>
+      <li className="border-t border-gray-100">
+        <button
+          role="menuitem"
+          onClick={async () => {
+            setOpen(false);
+            try { await logout(); } finally { navigate("/login"); }
+          }}
+          className={`btn-alt w-full py-2 text-right hover:bg-gray-50 focus:bg-gray-50 focus:outline-none`}
+        >
+          Logout
+        </button>
+      </li>
+    </ul>
+  </div>
+)}
+
         </div>
       </div>
     </nav>

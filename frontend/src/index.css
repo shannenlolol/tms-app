@@ -59,6 +59,23 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* global.css */
+.avatar-btn {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+.avatar-btn:focus-visible {
+  outline: 0 !important;
+  box-shadow: none !important; /* add your own ring if desired */
+  /* example circular focus ring:
+  box-shadow: 0 0 0 2px rgba(99,102,241,.5);
+  border-radius: 9999px;
+  */
+}
+
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
@@ -68,6 +85,9 @@ button:focus-visible {
     color: #747bff;
   }
   button {
-    background-color: #dddbf5;
+    background-color: #a09ccd;
   }
+
+  button.btn-alt { background-color: #ffffff; }
+  button.btn-dark { background-color: #462d6e; }
 }
