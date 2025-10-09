@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import axios from "axios";
 import { login as apiLogin, logout as apiLogout, check } from "../api/auth";
 import { getAccessToken, setAccessToken } from "../api/client";
+import { getCurrentUser } from "../api/users";
 
 const AuthCtx = createContext(null);
 
@@ -21,38 +22,42 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        // 1) Try to mint a fresh access token using the refresh cookie
-        //    (needs SameSite=None; Secure; CORS credentials on the server)
-        const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
-          withCredentials: true,
-        });
-        if (data?.accessToken) setAccessToken(data.accessToken);
-      } catch {
-        // no cookie or refresh failed — fine, proceed as signed-out
-      } finally {
-        try {
-          // 2) Ask who I am (check() should return null on 401)
-          const me = await check();
-          setUser(me || null);
-        } finally {
-          // 3) Unblock route guards only after refresh+check
-          setReady(true);
-        }
+useEffect(() => {
+  (async () => {
+    try {
+      // refresh access token from cookie
+      const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
+        withCredentials: true,
+      });
+      if (data?.accessToken) setAccessToken(data.accessToken);
+    } catch {}
+    try {
+      // minimal check (may return {id:1} or null)
+      const me = await check();           // me could be null or {id:1} or full user
+
+      let fullUser = null;
+      if (me) {
+        // hydrate to full profile regardless of me shape
+        fullUser = await getCurrentUser();  // GET /users/current returns username, groups, active, etc.
       }
-    })();
-  }, []);
+      setUser(fullUser);
+    } finally {
+      setReady(true);
+    }
+  })();
+}, []);
 
   const value = useMemo(() => {
     // Derive groups/roles safely
+    console.log("ADAD", user)
     const groups = normaliseGroupsLoose(user);
     const isActive = user?.active !== 0 && user?.active !== false;
 
     // Accept either server-provided `isAdmin` or infer from groups/codes/labels
-    const inferredAdmin = groups.includes("AD") || groups.includes("Admin");
-    const isAdmin = Boolean(user?.isAdmin ?? inferredAdmin);
+    const inferredAdmin = groups.includes("AD") || groups.includes("ADMIN");
+
+    const isAdmin = user == null ? null : Boolean(user?.isAdmin ?? inferredAdmin);
+
 
     console.log(isAdmin,"dadasdas")
     // IMPORTANT: don’t hinge routing on token presence

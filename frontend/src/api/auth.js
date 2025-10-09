@@ -12,7 +12,7 @@ export async function check() {
   try {
     // IMPORTANT: use `http`, and don't prefix with /api because baseURL already has it
     const { data } = await http.get("/check");
-    return data ?? null;
+    return data?.user ?? data ?? null;
   } catch (e) {
     if (e?.response?.status === 401) return null; // unauthenticated is not an exception
     throw e;
