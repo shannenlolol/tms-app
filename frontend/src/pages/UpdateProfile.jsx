@@ -38,6 +38,20 @@ export default function UpdateProfile() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [successmsg, setSuccessMsg] = useState("");
+
+    useEffect(() => {
+  if (!msg) return;
+  const t = setTimeout(() => setMsg(""), 5000);
+  return () => clearTimeout(t); // cleanup if msg changes/unmounts
+}, [msg]);
+
+useEffect(() => {
+  if (!successmsg) return;
+  const t = setTimeout(() => setSuccessMsg(""), 5000);
+  return () => clearTimeout(t);
+}, [successmsg]);
+
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
@@ -128,7 +142,7 @@ export default function UpdateProfile() {
       setProfile(updated);
       setEditing(false);
       setDraft({ email: updated.email || "", currentPassword: "", newPassword: "" });
-      setMsg("Profile updated.");           // <-- don’t accidentally use an undefined variable
+      setSuccessMsg("Profile updated.");           // <-- don’t accidentally use an undefined variable
     } catch (e) {
       console.error("Update failed:", e?.response?.status, e?.response?.data);
       setMsg(e?.response?.data?.message || e.message || "Update failed");
@@ -139,8 +153,16 @@ export default function UpdateProfile() {
   return (
     <div className="p-4">
       {msg && (
-        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+        <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800">
           {msg}
+        
+        </div>
+      )}
+
+            {successmsg && (
+        <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-800">
+          {successmsg}
+        
         </div>
       )}
 

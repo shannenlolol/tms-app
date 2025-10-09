@@ -248,6 +248,7 @@ const saveEdit = async () => {
     );
 
     cancelEdit();
+    setSuccessMsg("Profile updated.");
   } catch (e) {
   // SEE the exact backend reason in the console
   console.error(
@@ -509,7 +510,6 @@ const onAddUserGroup = async () => {
                           type="checkbox"
                           className="h-4 w-4 accent-blue-600"
                           checked={!!row.active}
-                          onChange={(e) => onToggleActive(row, e.target.checked)}
                         />
                       )}
                     </td>
