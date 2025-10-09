@@ -36,9 +36,11 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => {
     const token = getAccessToken();
-    const groups = normaliseGroups(user?.usergroup);
+    const groups = normaliseGroups(user?.groups);
+    console.log(user?.isAdmin)
+
     // Adjust "AD" if your admin code differs
-    const isAdmin = groups.includes("AD");
+    const isAdmin = user?.isAdmin
     const isActive = user?.active !== 0 && user?.active !== false;
     const isAuthenticated = !!user && !!token && isActive;
 
@@ -54,9 +56,9 @@ export function AuthProvider({ children }) {
       // optional roles helper
       roles: {
         isAdmin,
-        isPL: groups.includes("PL"),
-        isPM: groups.includes("PM"),
-        isDEV: groups.includes("DEV"),
+        isPL: groups.includes("Project Lead"),
+        isPM: groups.includes("Project Manager"),
+        isDEV: groups.includes("Dev Team"),
         groups,
       },
 

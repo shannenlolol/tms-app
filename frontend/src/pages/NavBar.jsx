@@ -1,15 +1,16 @@
 import { logout } from "../api/auth";  // <-- logout now exists
+import { Link, useNavigate, NavLink } from "react-router-dom";
 
 export default function NavBar() {
+  const navigate = useNavigate();
   return (
     <nav className="bg-white border-gray-200 dark:bg-gray-900 shadow-md mb-8">
       <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
-        <a href="/admin" className="flex items-center space-x-3 rtl:space-x-reverse">
-          {/* <img src="https://flowbite.com/docs/images/logo.svg" className="h-8" alt="Flowbite Logo" /> */}
+        <Link to="/" className="flex items-center space-x-3 rtl:space-x-reverse">
           <span className="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
             Task Management System
           </span>
-        </a>
+        </Link>
 
         <button
           data-collapse-toggle="navbar-default"
@@ -41,7 +42,8 @@ export default function NavBar() {
                           dark:bg-gray-800 md:dark:bg-gray-900 dark:border-gray-700">
             <li>
               <button
-                onClick={() => (window.location.href = "/profile")}
+                type="button" // prevent form submits reloading the page
+                onClick={() => navigate("/profile")}
                 className="rounded-md bg-gray-800 text-white px-3 py-1.5 hover:bg-black"
               >
                 Update Profile
@@ -49,7 +51,7 @@ export default function NavBar() {
             </li>
             <li>
               <button
-                onClick={() => logout().then(() => (window.location.href = "/login"))}
+                onClick={() => logout().then(() => navigate("/login"))}
                 className="rounded-md bg-gray-800 text-white px-3 py-1.5 hover:bg-black"
               >
                 Logout

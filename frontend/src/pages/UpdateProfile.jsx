@@ -19,9 +19,9 @@ function normaliseGroups(arrOrCsv) {
   return Array.isArray(arrOrCsv)
     ? arrOrCsv
     : String(arrOrCsv || "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 }
 
 function GroupTag({ children }) {
@@ -122,19 +122,18 @@ export default function UpdateProfile() {
       return;
     }
 
+
     try {
-      setSaving(true);
-      const updated = await updateCurrentUser(payload); // Axios client
-      const normalised = { ...updated, usergroup: normaliseGroups(updated.usergroup) };
-      setProfile(normalised);
+      const updated = await updateCurrentUser(payload);
+      setProfile(updated);
       setEditing(false);
-      setDraft({ email: normalised.email || "", currentPassword: "", newPassword: "" });
-      setMsg("Profile updated.");
+      setDraft({ email: updated.email || "", currentPassword: "", newPassword: "" });
+      setMsg("Profile updated.");           // <-- don’t accidentally use an undefined variable
     } catch (e) {
+      console.error("Update failed:", e?.response?.status, e?.response?.data);
       setMsg(e?.response?.data?.message || e.message || "Update failed");
-    } finally {
-      setSaving(false);
     }
+
   };
 
   return (
@@ -154,7 +153,6 @@ export default function UpdateProfile() {
               <th className="px-6 py-3">Email</th>
               <th className="px-6 py-3">Current Password</th>
               <th className="px-6 py-3">New Password</th>
-              <th className="px-6 py-3">Active</th>
               <th className="px-6 py-3"></th>
             </tr>
           </thead>
@@ -221,16 +219,6 @@ export default function UpdateProfile() {
                   )}
                 </td>
 
-                {/* Active (read-only) */}
-                <td className="px-6 py-4">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-blue-600"
-                    checked={!!profile.active}
-                    readOnly
-                    aria-readonly="true"
-                  />
-                </td>
 
                 {/* Actions */}
                 <td className="px-6 py-4">

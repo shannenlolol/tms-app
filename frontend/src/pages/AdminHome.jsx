@@ -197,37 +197,49 @@ export default function AdminHome() {
   const updateDraft = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
   const updateNew = (key, value) => setNewUser((u) => ({ ...u, [key]: value }));
 
-  const saveEdit = async () => {
-    if (!draft) return;
-    const payload = {
-      username: draft.username,
-      usergroup: draft.usergroup, // array of full names
-      active: !!draft.active,
-    };
-    if (draft.email) {
-      if (!emailValid(draft.email)) {
-        setMsg("Email must be valid.");
-        return;
-      }
-      payload.email = draft.email;
-    }
-    if (draft.password) {
-      if (!pwdValid(draft.password)) {
-        setMsg(
-          "Password must be 8–10 chars, include letters, numbers, and a special character."
-        );
-        return;
-      }
-      payload.password = draft.password;
-    }
-    try {
-      const updated = await updateUser(draft.id, payload);
-      setRows((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
-      cancelEdit();
-    } catch (e) {
-      setMsg(e.message || "Update failed");
-    }
+const saveEdit = async () => {
+  if (!draft) return;
+
+  const payload = {
+    username: draft.username,
+    usergroup: draft.usergroup,
+    active: !!draft.active,
   };
+
+  if (draft.email) {
+    const email = draft.email.trim().toLowerCase();
+    if (!emailValid(email)) {
+      setMsg("Email must be valid.");
+      return;
+    }
+    payload.email = email;
+  }
+  if (draft.password) {
+    if (!pwdValid(draft.password)) {
+      setMsg("Password must be 8–10 chars, include letters, numbers, and a special character.");
+      return;
+    }
+    payload.password = draft.password;
+  }
+
+  try {
+    const apiRes = await updateUser(draft.id, payload);
+
+    // Prefer object returned by API; else merge local payload into existing row
+    setRows((rs) =>
+      rs.map((r) =>
+        r.id === draft.id
+          ? (apiRes && apiRes.id ? apiRes : { ...r, ...payload, password: undefined })
+          : r
+      )
+    );
+
+    cancelEdit();
+  } catch (e) {
+    setMsg(e?.response?.data?.message || e.message || "Update failed");
+  }
+};
+
 
   const onToggleActive = async (row, next) => {
     try {

@@ -1,6 +1,4 @@
 import { Router } from "express";
-import pool from "../models/db.js";
-import bcrypt from "bcrypt";
 import { ensureAuth } from "../middleware/jwt.js";
 import { getCurrentUser, updateCurrentUser } from "../controllers/self.controller.js";
 
