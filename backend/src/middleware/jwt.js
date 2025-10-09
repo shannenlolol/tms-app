@@ -38,6 +38,9 @@ export function setRefreshCookie(res, refreshToken) {
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days (matches default)
   });
 }
+
+
+
 export function clearRefreshCookie(res) {
   res.clearCookie("rt", { path: "/api/auth/refresh" });
 }

@@ -142,6 +142,19 @@ export default function AdminHome() {
   const [msg, setMsg] = useState("");
   const [successmsg, setSuccessMsg] = useState("");
 
+  useEffect(() => {
+  if (!msg) return;
+  const t = setTimeout(() => setMsg(""), 5000);
+  return () => clearTimeout(t); // cleanup if msg changes/unmounts
+}, [msg]);
+
+useEffect(() => {
+  if (!successmsg) return;
+  const t = setTimeout(() => setSuccessMsg(""), 5000);
+  return () => clearTimeout(t);
+}, [successmsg]);
+
+
   // edit state
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -236,8 +249,20 @@ const saveEdit = async () => {
 
     cancelEdit();
   } catch (e) {
-    setMsg(e?.response?.data?.message || e.message || "Update failed");
-  }
+  // SEE the exact backend reason in the console
+  console.error(
+    "Admin update failed:",
+    e?.response?.status,
+    e?.response?.data
+  );
+
+  // Show a friendly message in UI
+  const msg =
+    (typeof e?.response?.data === "string" ? e.response.data : e?.response?.data?.message) ||
+    e.message ||
+    "Update failed";
+  setMsg(msg);
+}
 };
 
 

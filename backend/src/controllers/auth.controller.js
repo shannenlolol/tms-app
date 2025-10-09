@@ -66,10 +66,17 @@ export const refresh = (req, res) => {
 };
 
 /** POST /api/logout */
-export const logout = (_req, res) => {
-  clearRefreshCookie(res);
-  res.json({ ok: true });
-};
+export async function logout(_req, res) {
+  // MUST match the cookie attributes you used when setting it!
+  res.clearCookie("rt", {
+    httpOnly: true,
+    secure: true,         // because you're on https://localhost
+    sameSite: "none",     // cross-site (5173 <-> 3000)
+    path: "/api/auth/refresh", // EXACT same path used when setting the cookie
+  });
+  return res.sendStatus(204); // no content
+}
+
 
 /** GET /api/check  (optional) */
 export const check = (req, res) => {

@@ -2,6 +2,18 @@
 import pool from "../models/db.js";
 import bcrypt from "bcrypt";
 
+const emailRe =
+  /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
+const emailOk = (s) => typeof s === "string" && emailRe.test(s);
+
+const pwdOk = (s) =>
+  typeof s === "string" &&
+  s.length >= 8 &&
+  s.length <= 10 &&
+  /[A-Za-z]/.test(s) &&
+  /\d/.test(s) &&
+  /[^A-Za-z0-9]/.test(s);
+  
 /** GET /api/users/current */
 export async function getCurrentUser(req, res) {
   const userId = req.user?.id;
@@ -24,56 +36,94 @@ export async function getCurrentUser(req, res) {
 
 /** PUT /api/users/current  { email?, currentPassword?, newPassword? } */
 export async function updateCurrentUser(req, res) {
-  const userId = req.user?.id;
+  const userId = Number(req.user?.id);
   if (!userId) return res.status(401).json({ message: "Unauthenticated" });
 
-  const { email, currentPassword, newPassword } = req.body ?? {};
+  let { email = "", currentPassword = "", newPassword = "" } = req.body ?? {};
+  email = String(email).trim();
+  currentPassword = String(currentPassword || "");
+  newPassword = String(newPassword || "");
 
-  // fetch current user (to verify password if needed)
-  const [rows] = await pool.query(
-    "SELECT id, email, password_hash FROM accounts WHERE id = ? LIMIT 1",
+  // Load current user (need existing values and hash)
+  const [[me]] = await pool.query(
+    "SELECT id, email, password FROM accounts WHERE id = ? LIMIT 1",
     [userId]
   );
-  if (rows.length === 0) return res.status(404).json({ message: "Not found" });
+  if (!me) return res.status(404).json({ message: "Not found" });
 
-  const user = rows[0];
   const updates = [];
   const params = [];
 
-  // email change (if different)
-  if (typeof email === "string" && email.trim() && email.trim() !== user.email) {
+  // ---- EMAIL CHANGE (no password required) ----
+  const emailChanged =
+    !!email && email.toLowerCase() !== String(me.email || "").toLowerCase();
+
+  if (emailChanged) {
+    if (!emailOk(email)) {
+      return res.status(400).json({ message: "Email must be valid." });
+    }
+    // OPTIONAL: enforce uniqueness gracefully (if DB unique index exists,
+    // catch ER_DUP_ENTRY below instead of pre-checking)
     updates.push("email = ?");
-    params.push(email.trim());
+    params.push(email.toLowerCase());
   }
 
-  // password change (if requested)
-  if (currentPassword || newPassword) {
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: "Both currentPassword and newPassword are required" });
-    }
-    const ok = await bcrypt.compare(String(currentPassword), user.password_hash);
-    if (!ok) return res.status(401).json({ message: "Current password is incorrect" });
+  // ---- PASSWORD CHANGE (requires current + new, and strength) ----
+  const passwordChanging = !!currentPassword || !!newPassword;
 
-    const hash = await bcrypt.hash(String(newPassword), 12);
-    updates.push("password_hash = ?");
+  if (passwordChanging) {
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Please provide current and new password." });
+    }
+    if (!pwdOk(newPassword)) {
+      return res.status(400).json({
+        message:
+          "New password must be 8–10 chars and include letters, numbers, and a special character.",
+      });
+    }
+    const ok = await bcrypt.compare(currentPassword, me.password || "");
+    if (!ok) return res.status(401).json({ message: "Current password is incorrect." });
+
+    const hash = await bcrypt.hash(newPassword, 12);
+    updates.push("password = ?");
     params.push(hash);
   }
 
-  if (updates.length) {
-    params.push(userId);
-    await pool.query(`UPDATE accounts SET ${updates.join(", ")} WHERE id = ?`, params);
+  if (updates.length === 0) {
+    return res.status(400).json({ message: "No changes to save." });
   }
 
-  // return fresh profile
-  const [rows2] = await pool.query(
+  try {
+    params.push(userId);
+    await pool.query(
+      `UPDATE accounts SET ${updates.join(", ")} WHERE id = ? LIMIT 1`,
+      params
+    );
+  } catch (err) {
+    // Friendly duplicate-email message if unique index triggers
+    if (err?.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ message: "Email already in use." });
+    }
+    throw err;
+  }
+
+  // Return fresh profile
+  const [[u2]] = await pool.query(
     "SELECT id, username, email, usergroups, active FROM accounts WHERE id = ? LIMIT 1",
     [userId]
   );
-  const u2 = rows2[0];
   const usergroup = String(u2.usergroups || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  res.json({ id: u2.id, username: u2.username, email: u2.email, usergroup, active: !!u2.active });
+  res.json({
+    id: u2.id,
+    username: u2.username,
+    email: u2.email ?? "",
+    usergroup,
+    active: !!u2.active,
+  });
 }

@@ -1,6 +1,6 @@
-// src/api/auth.js
 import http, { setAccessToken } from "./client";
 
+// POST /api/auth  -> { accessToken, user }
 export async function login(username, password) {
   const { data } = await http.post("/auth", { username, password });
   setAccessToken(data?.accessToken || null);
@@ -10,14 +10,22 @@ export async function login(username, password) {
 // GET /api/check -> profile | 401
 export async function check() {
   try {
-    const { data } = await client.get("/api/check");
+    // IMPORTANT: use `http`, and don't prefix with /api because baseURL already has it
+    const { data } = await http.get("/check");
     return data ?? null;
   } catch (e) {
-    if (e?.response?.status === 401) return null; // treat as signed-out
+    if (e?.response?.status === 401) return null; // unauthenticated is not an exception
     throw e;
   }
 }
+
+// POST /api/auth/logout (adjust if your backend route is different)
 export async function logout() {
-  setAccessToken(null);
-  await http.post("/logout");
+  try {
+    // clear refresh cookie server-side
+    await http.post("/auth/logout", null, { withCredentials: true });
+  } finally {
+    // always drop access token locally
+    setAccessToken(null);
+  }
 }

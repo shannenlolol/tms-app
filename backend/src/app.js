@@ -37,9 +37,11 @@ const crossSite = true; // frontend on different origin (Vite dev) -> cross-site
 
 // All APIs under /api
 app.use("/api", authRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/users", ensureAuth, selfRoutes); // exposes /api/users/current (GET, PUT)
 app.use("/api", ensureAuth, usersRoutes); 
 app.use("/api/user-groups", ensureAuth, groupRoutes);
-app.use("/api/users", ensureAuth, selfRoutes); // exposes /api/users/current (GET, PUT)
+
 
 // 404
 app.use((req, res) => res.status(404).json({ error: "Not found" }));

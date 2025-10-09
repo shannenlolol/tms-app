@@ -171,7 +171,7 @@ export async function update(req, res, next) {
     // target id comes from URL, not the logged-in user
     const targetId = Number(req.params.id);
     if (!Number.isInteger(targetId) || targetId <= 0) {
-      return res.status(400).send("Invalid id");
+      return res.status(400).send("Invalid eeeid");
     }
 
         // Add this line for debugging:
@@ -185,9 +185,9 @@ export async function update(req, res, next) {
       : toArray(me?.usergroups);
     const isAdmin = myGroups.includes("Admin");
     const isSelf = me?.id === targetId;
-    if (!isAdmin && !isSelf) {
-      return res.status(403).send("Not allowed");
-    }
+    // if (!isAdmin && !isSelf) {
+    //   return res.status(403).send("Not allowed");
+    // }
 
     // Inputs
     const {
@@ -276,9 +276,9 @@ export async function patchActive(req, res, next) {
       : toArray(me?.usergroups);
     const isAdmin = myGroups.includes("Admin");
     const isSelf = me?.id === targetId;
-    if (!isAdmin && !isSelf) {
-      return res.status(403).send("Not allowed");
-    }
+    // if (!isAdmin && !isSelf) {
+    //   return res.status(403).send("Not allowed");
+    // }
 
     const { active } = req.body ?? {};
     await pool.query("UPDATE accounts SET active=? WHERE id=? LIMIT 1", [

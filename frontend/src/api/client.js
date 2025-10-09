@@ -1,4 +1,3 @@
-// src/api/client.js
 import axios from "axios";
 
 /** In-memory access token */
@@ -9,14 +8,14 @@ export const getAccessToken = () => accessToken;
 /** One shared Axios instance */
 const http = axios.create({
   baseURL: "https://localhost:3000/api",
-  withCredentials: true, // send/receive refresh cookie
+  withCredentials: true, // needed for refresh cookie calls
 });
 
 // Attach Authorization
 http.interceptors.request.use((config) => {
-  if (!config.headers) config.headers = {};
+  config.headers ||= {};
   const at = getAccessToken();
-  if (at) config.headers["Authorization"] = `Bearer ${at}`;
+  if (at) config.headers.Authorization = `Bearer ${at}`;
   return config;
 });
 
@@ -26,8 +25,9 @@ let queue = [];
 
 function flushQueue(newToken) {
   queue.forEach(({ resolve, reject, original }) => {
+    original.headers ||= {};
     if (newToken) {
-      original.headers["Authorization"] = `Bearer ${newToken}`;
+      original.headers.Authorization = `Bearer ${newToken}`;
       http(original).then(resolve).catch(reject);
     } else {
       reject(new Error("Unauthorised"));
@@ -59,8 +59,9 @@ http.interceptors.response.use(
       setAccessToken(newToken);
       flushQueue(newToken);
 
+      original.headers ||= {};
       if (newToken) {
-        original.headers["Authorization"] = `Bearer ${newToken}`;
+        original.headers.Authorization = `Bearer ${newToken}`;
         return http(original);
       }
       return Promise.reject(error);

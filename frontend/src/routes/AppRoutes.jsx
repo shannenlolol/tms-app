@@ -10,22 +10,21 @@ import NotFound from "../pages/NotFound.jsx";
 import AdminNavBar from "../pages/AdminNavBar.jsx";
 import NavBar from "../pages/NavBar.jsx"
 
-/** Signed-in only */
 function Protected({ children }) {
   const { ready, isAuthenticated } = useAuth();
-  if (!ready) return null; // or a spinner
+  if (!ready) return <div className="p-6">Checking session…</div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
 }
 
-/** Admin only */
 function AdminOnly({ children }) {
   const { ready, isAuthenticated, isAdmin } = useAuth();
-  if (!ready) return null;
+  if (!ready) return <div className="p-6">Checking session…</div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!isAdmin) return <Navigate to="/" replace />;
   return children;
 }
+
 
 export default function AppRoutes() {
   return (
