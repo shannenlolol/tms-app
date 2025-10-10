@@ -2,8 +2,8 @@
 import http from "./client";
 
 // GET ["Admin","Dev Team","Project Lead","Project Manager"]
-export const getUserGroups = async () => (await http.get("/user-groups")).data;
+export const getUserGroups = async () => (await http.get("/groups")).data;
 
 // POST { name } -> { name }
 export const createUserGroup = async (name) =>
-  (await http.post("/user-groups", { name })).data.name;
+  (await http.post("/groups", { name })).data.name;

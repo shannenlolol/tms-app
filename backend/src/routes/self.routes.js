@@ -5,9 +5,9 @@ import { getCurrentUser, updateCurrentUser } from "../controllers/self.controlle
 const r = Router();
 
 // GET current user
-r.get("/current", ensureAuth, getCurrentUser);
+r.get("/", ensureAuth, getCurrentUser);      // GET /api/current
 
 // PUT current user (email and/or password)
-r.put("/current", ensureAuth, updateCurrentUser);
+r.put("/", ensureAuth, updateCurrentUser);   // PUT /api/current
 
 export default r;

@@ -1,15 +1,15 @@
 // src/api/users.js
 import http from "./client";
 
-// GET /api/users/current  -> current profile
+// GET /api/current  -> current profile
 export const getCurrentUser = async () => {
-  const { data } = await http.get("/users/current");
+  const { data } = await http.get("/current");
   return data;
 };
 
-// PUT /api/users/current -> update email and/or password
+// PUT /api/current -> update email and/or password
 export const updateCurrentUser = async (payload) =>
-  (await http.put("/users/current", payload)).data;
+  (await http.put("/current", payload)).data;
 
 // Admin endpoints
 export const getUsers = async () => (await http.get("/users")).data;

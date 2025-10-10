@@ -49,17 +49,12 @@ useEffect(() => {
 
   const value = useMemo(() => {
     // Derive groups/roles safely
-    console.log("ADAD", user)
     const groups = normaliseGroupsLoose(user);
     const isActive = user?.active !== 0 && user?.active !== false;
-
-    // Accept either server-provided `isAdmin` or infer from groups/codes/labels
     const inferredAdmin = groups.includes("AD") || groups.includes("ADMIN");
 
     const isAdmin = user == null ? null : Boolean(user?.isAdmin ?? inferredAdmin);
 
-
-    console.log(isAdmin,"dadasdas")
     // IMPORTANT: don’t hinge routing on token presence
     const isAuthenticated = !!user && isActive;
 

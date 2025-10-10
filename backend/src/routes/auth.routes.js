@@ -4,9 +4,9 @@ import { ensureAuth } from "../middleware/jwt.js";
 
 const router = Router();
 
-router.post("/auth", login);       // <-- POST /api/auth
-router.get("/check", ensureAuth, check);
-router.get("/auth/refresh", refresh); 
-router.post("/logout", logout);
+router.post("/", login);                 // POST /api/auth
+router.get("/check", ensureAuth, check); // GET  /api/auth/check
+router.get("/refresh", refresh);         // GET  /api/auth/refresh 
+router.post("/logout", logout);          // POST /api/auth/logout
 
 export default router;

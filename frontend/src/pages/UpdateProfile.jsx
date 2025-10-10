@@ -157,6 +157,9 @@ export default function UpdateProfile() {
       {/* same wrapper rules as Admin: no inner scroll clipping */}
       <div className="relative shadow-md sm:rounded-lg overflow-visible">
         <table className="w-full text-sm text-left text-gray-700">
+          <caption className="caption-top text-xl font-semibold text-indigo-600 mb-10">
+    Update Profile
+  </caption>
           <thead className="text-xs uppercase bg-gray-50">
             <tr>
               <th className="px-6 py-3">Username</th>
