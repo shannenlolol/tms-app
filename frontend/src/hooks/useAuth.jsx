@@ -7,17 +7,6 @@ import { getCurrentUser } from "../api/users";
 
 const AuthCtx = createContext(null);
 
-// Normalize groups: accept `groups`, `usergroup`, CSV or array, labels or codes
-function normaliseGroupsLoose(u) {
-  const raw = u?.groups ?? u?.usergroup ?? [];
-  const arr = Array.isArray(raw) ? raw : String(raw).split(",");
-  return arr
-    .map(String)
-    .map(s => s.trim())
-    .filter(Boolean)
-    .map(s => s.toUpperCase()); // compare in upper-case
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
@@ -48,12 +37,8 @@ useEffect(() => {
 }, []);
 
   const value = useMemo(() => {
-    // Derive groups/roles safely
-    const groups = normaliseGroupsLoose(user);
     const isActive = user?.active !== 0 && user?.active !== false;
-    const inferredAdmin = groups.includes("AD") || groups.includes("ADMIN");
-
-    const isAdmin = user == null ? null : Boolean(user?.isAdmin ?? inferredAdmin);
+    const isAdmin =user?.isAdmin;
 
     // IMPORTANT: don’t hinge routing on token presence
     const isAuthenticated = !!user && isActive;
@@ -66,15 +51,6 @@ useEffect(() => {
       isAuthenticated,
       isAuthed: isAuthenticated, // alias for older code
       isAdmin,
-
-      // role helpers (map your labels if you use them)
-      roles: {
-        isAdmin,
-        isPL: groups.includes("Project Lead") || groups.includes("PL"),
-        isPM: groups.includes("Project Manager") || groups.includes("PM"),
-        isDEV: groups.includes("Dev Team") || groups.includes("DEV"),
-        groups,
-      },
 
       // actions
       async login(username, password) {
