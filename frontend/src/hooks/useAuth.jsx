@@ -37,8 +37,10 @@ useEffect(() => {
 }, []);
 
   const value = useMemo(() => {
+    const groups =  user?.groups ?? user?.usergroup ?? [];
     const isActive = user?.active !== 0 && user?.active !== false;
-    const isAdmin =user?.isAdmin;
+    const inferredAdmin = groups.includes("Admin");
+    const isAdmin = user == null ? null : Boolean(user?.isAdmin ?? inferredAdmin);
 
     // IMPORTANT: don’t hinge routing on token presence
     const isAuthenticated = !!user && isActive;
