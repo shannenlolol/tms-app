@@ -258,6 +258,7 @@ export default function AdminHome() {
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                   value={newUser.username}
                   onChange={(e) => changeNew("username", e.target.value)}
+                  autoComplete="off"
                 />
               </td>
               <td className="px-6 py-3">
@@ -274,6 +275,7 @@ export default function AdminHome() {
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                   value={newUser.email}
                   onChange={(e) => changeNew("email", e.target.value)}
+                  autoComplete="off"
                 />
               </td>
               <td className="px-6 py-3">
@@ -283,15 +285,17 @@ export default function AdminHome() {
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                   value={newUser.password}
                   onChange={(e) => changeNew("password", e.target.value)}
+                  autoComplete="off"
                 />
               </td>
               <td className="px-6 py-3">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-blue-600"
-                  checked={!!newUser.active}
-                  onChange={(e) => changeNew("active", e.target.checked)}
-                />
+
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="checkbox" value="" class="sr-only peer" checked={!!newUser.active}
+                    onChange={(e) => changeNew("active", e.target.checked)} />
+                  <div class="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
+                </label>
+
               </td>
               <td className="px-6 py-3">
                 <button
@@ -323,6 +327,7 @@ export default function AdminHome() {
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                       value={row.username ?? ""}
                       onChange={(e) => changeRow(row.id, "username", e.target.value)}
+                      autoComplete="off"
                     />
                   </td>
 
@@ -336,10 +341,11 @@ export default function AdminHome() {
 
                   <td className="px-6 py-4">
                     <input
-                     className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
+                      className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                       value={row.email ?? ""}
                       onChange={(e) => changeRow(row.id, "email", e.target.value)}
+                      autoComplete="off"
                     />
                   </td>
 
@@ -347,20 +353,20 @@ export default function AdminHome() {
                     <input
                       type="password"
                       className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50" 
+           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                       value={row.password || ""}
                       onChange={(e) => changeRow(row.id, "password", e.target.value)}
                       placeholder="*********"
+                      autoComplete="off"
                     />
                   </td>
 
                   <td className="px-6 py-4">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-blue-600"
-                      checked={!!row.active}
-                      onChange={(e) => changeRow(row.id, "active", e.target.checked)}
-                    />
+                <label class="inline-flex items-center cursor-pointer">
+                  <input type="checkbox" value="" class="sr-only peer" checked={!!row.active}
+                    onChange={(e) => changeRow(row.id, "active", e.target.checked)} />
+                  <div class="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
+                </label>
                   </td>
 
                   <td className="px-6 py-4">

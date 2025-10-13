@@ -56,7 +56,7 @@ export default function Login() {
                              outline-none"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  autoComplete="username"
+                  autoComplete="off"
                 />
               </div>
 
@@ -68,6 +68,7 @@ export default function Login() {
                              px-3 py-2.5 text-slate-900 dark:text-slate-100 placeholder-slate-400
                              outline-none"
                     value={password}
+                    autoComplete="off"
                     onChange={(e) => setPassword(e.target.value)}
                      />
                 </div>

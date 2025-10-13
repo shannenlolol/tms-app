@@ -195,7 +195,7 @@ export default function UpdateProfile() {
                   className="w-full rounded-md border border-gray-300 px-3 py-2 bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50 outline-none"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Value"
+                  autoComplete="off"
                 />
               </div>
 
@@ -207,7 +207,8 @@ export default function UpdateProfile() {
                   className="w-full rounded-md border border-gray-300 px-3 py-2 bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50 outline-none"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Value"
+                  autoComplete="off"
+                  placeholder="********"
                 />
               </div>
 
@@ -219,7 +220,8 @@ export default function UpdateProfile() {
                   className="w-full rounded-md border border-gray-300 px-3 py-2 bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50 outline-none"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Value"
+                  autoComplete="off"
+                  placeholder="********"
                 />
               </div>
 
@@ -231,7 +233,8 @@ export default function UpdateProfile() {
                   className="w-full rounded-md border border-gray-300 px-3 py-2 bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50 outline-none"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Value"
+                  placeholder="********"
+                  autoComplete="off"
                 />
               </div>
 
