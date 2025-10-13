@@ -53,15 +53,7 @@ export default function App() {
               </AdminOnly>
             }
           />
-          <Route
-            path="/admin/profile"
-            element={
-              <AdminOnly>
-                <AdminNavBar />
-                <UpdateProfile />
-              </AdminOnly>
-            }
-          />
+
 
           {/* USER PAGES */}
           <Route

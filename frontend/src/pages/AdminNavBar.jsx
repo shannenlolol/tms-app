@@ -41,57 +41,43 @@ export default function AdminNavBar() {
         {/* User avatar / trigger */}
         <div className="relative">
 
-<button
-  ref={btnRef}
-  type="button"
-  onClick={() => setOpen(v => !v)}
-  className="avatar-btn inline-flex h-14 w-20 items-center justify-center
+          <button
+            ref={btnRef}
+            type="button"
+            onClick={() => setOpen(v => !v)}
+            className="avatar-btn inline-flex h-14 w-20 items-center justify-center
              rounded-full overflow-hidden bg-transparent
              border-none outline-none shadow-none
              focus:outline-none focus:ring-0"
->
-  <img
-    src="/user_icon.png"
-    className="h-full w-full object-contain select-none pointer-events-none"
-    draggable={false}
-  />
-</button>
+          >
+            <img
+              src="/user_icon.png"
+              className="h-full w-full object-contain select-none pointer-events-none"
+              draggable={false}
+            />
+          </button>
 
           {/* Dropdown menu */}
-{open && (
-  <div
-    ref={menuRef}
-    role="menu"
-    className="absolute right-0 w-32 rounded-md border border-gray-200 bg-white shadow-xl z-50"
-  >
-    <ul className="py-1 text-sm text-gray-800">
-      <li>
-        <button
-          role="menuitem"
-          onClick={() => {
-            setOpen(false);
-            navigate("/admin/profile");
-          }}
-          className={`btn-alt w-full py-2 text-right hover:bg-gray-50 focus:bg-gray-50 focus:outline-none`}
-        >
-          Update Profile
-        </button>
-      </li>
-      <li className="border-t border-gray-100">
-        <button
-          role="menuitem"
-          onClick={async () => {
-            setOpen(false);
-            try { await logout(); } finally { navigate("/login"); }
-          }}
-          className={`btn-alt w-full py-2 text-right hover:bg-gray-50 focus:bg-gray-50 focus:outline-none`}
-        >
-          Logout
-        </button>
-      </li>
-    </ul>
-  </div>
-)}
+          {open && (
+            <div
+              ref={menuRef}
+              role="menu"
+              className="absolute right-0 w-24 rounded-md border border-gray-200 bg-white shadow-xl z-50"
+            >
+
+              <button
+                role="menuitem"
+                onClick={async () => {
+                  setOpen(false);
+                  try { await logout(); } finally { navigate("/login"); }
+                }}
+                className={`btn-alt w-full py-2 text-right hover:bg-gray-50 focus:bg-gray-50 focus:outline-none`}
+              >
+                Logout
+              </button>
+
+            </div>
+          )}
 
         </div>
       </div>

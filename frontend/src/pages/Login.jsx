@@ -42,7 +42,7 @@ export default function Login() {
             <div className="mb-6 flex items-center justify-center gap-3">
 
               <h1 className="font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                TMS Login
+                Login
               </h1>
             </div>
 
@@ -81,7 +81,7 @@ export default function Login() {
                            py-2.5 font-medium shadow-lg transition
                            hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-60"
               >
-                {busy ? "Signing in…" : "Sign in"}
+                {busy ? "Logging in…" : "Log In"}
               </button>
 
               {/* Helper / error */}

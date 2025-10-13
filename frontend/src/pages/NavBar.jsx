@@ -62,7 +62,7 @@ export default function NavBar() {
   <div
     ref={menuRef}
     role="menu"
-    className="absolute right-0 w-32 rounded-md border border-gray-200 bg-white shadow-xl z-50"
+    className="absolute right-0 w-34 rounded-md border border-gray-200 bg-white shadow-xl z-50"
   >
     <ul className="py-1 text-sm text-gray-800">
       <li>
