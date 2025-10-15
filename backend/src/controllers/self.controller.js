@@ -1,4 +1,7 @@
-// backend/src/controllers/self.controller.js
+// controllers/self.controller.js
+//  * Implements GET /api/current and PUT /api/current.
+//  * Validates email/password rules, verifies currentPassword before change, updates DB, and returns fresh profile.
+
 import pool from "../models/db.js";
 import bcrypt from "bcrypt";
 

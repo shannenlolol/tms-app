@@ -1,4 +1,8 @@
-// backend/src/controllers/auth.controller.js
+/* controllers/auth.controller.js
+ * Login verifies bcrypt hash, issues access token + sets refresh cookie; refresh mints a new access from the cookie.
+ * Also supports logout (clears cookie) and check (echoes authenticated user).
+ */
+
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pool from "../models/db.js";

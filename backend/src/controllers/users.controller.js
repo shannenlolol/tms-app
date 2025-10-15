@@ -1,4 +1,8 @@
-// Matches accounts table: id, username, password, email, active, usergroups
+/* controllers/users.controller.js
+ * CRUD for accounts: list, create, update, toggle active; normalises usergroups CSV ⇄ array and validates inputs.
+ * Enforces basic uniqueness, password policy, and group validity against user_groups.
+ */ 
+
 import pool from "../models/db.js";
 import bcrypt from "bcrypt";
 
@@ -174,7 +178,6 @@ export async function update(req, res, next) {
       return res.status(400).send("Invalid eeeid");
     }
 
-        // Add this line for debugging:
     console.log("update(): targetId =", targetId, "req.user =", req.user);
 
 

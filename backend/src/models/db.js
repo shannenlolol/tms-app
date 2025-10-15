@@ -1,4 +1,6 @@
-// ESM MySQL pool (promise-based)
+//  * MySQL connection pool (mysql2/promise) initialised from environment variables.
+//  * Exported pool is shared across controllers for queries.
+
 import 'dotenv/config';
 import mysql from 'mysql2/promise';
 

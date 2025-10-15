@@ -1,4 +1,13 @@
 // src/hooks/useAuth.js
+//  * React auth context/provider: refreshes access token from cookie, 
+//    hydrates current user, and exposes flags (isAuthenticated, isAdmin) 
+//    plus actions (login, logout).
+
+//  * On mount: calls /auth/refresh, then check() and GET /users/current; 
+//    sets a `ready` gate so routing doesn’t hinge on token presence.
+
+//  * Exports: <AuthProvider>, useAuth().
+
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { login as apiLogin, logout as apiLogout, check } from "../api/auth";

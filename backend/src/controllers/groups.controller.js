@@ -1,3 +1,8 @@
+/* controllers/groups.controller.js
+ * Reads group names from user_groups as a simple list for the UI.
+ * Used by routes to supply ["Admin", "Dev Team", …].
+ */
+
 import pool from "../models/db.js";
 
 export const listGroups = async (_req, res) => {

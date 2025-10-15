@@ -1,4 +1,10 @@
 // src/App.jsx
+//  * App root & routing: wraps <AuthProvider> and <BrowserRouter>, 
+//    defines Protected/AdminOnly guards, and mounts shared nav bars.
+
+//  * Routes: /login, / (Protected Home), /admin (AdminOnly), /profile (Protected), 
+//    and a catch-all NotFound.
+
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
@@ -7,8 +13,8 @@ import Home from "./pages/Home.jsx";
 import AdminHome from "./pages/AdminHome.jsx";
 import UpdateProfile from "./pages/UpdateProfile.jsx";
 import NotFound from "./pages/NotFound.jsx";
-import AdminNavBar from "./pages/AdminNavBar.jsx";
-import NavBar from "./pages/NavBar.jsx"
+import AdminNavBar from "./components/AdminNavBar.jsx";
+import NavBar from "./components/NavBar.jsx"
 
 function Protected({ children }) {
   const { ready, isAuthenticated } = useAuth();
@@ -32,7 +38,6 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-
           <Route
             path="/"
             element={

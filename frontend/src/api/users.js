@@ -1,4 +1,8 @@
 // src/api/users.js
+//  * Users API helpers: current user + admin CRUD.
+//  * Endpoints: GET /users/current, GET/POST /users, PUT /users/:id, PATCH /users/:id/active.
+//  * Exports: getCurrentUser(), updateCurrentUser(), getUsers(), createUser(), updateUser(), toggleActive().
+
 import http from "./client";
 
 // GET /api/current  -> current profile

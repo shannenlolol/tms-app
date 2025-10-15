@@ -1,3 +1,10 @@
+//  src\middleware\jwt.js
+//  * JWT utilities: sign access/refresh tokens, auth guard (ensureAuth), 
+//    and helpers to set/clear the HttpOnly refresh cookie.
+
+//  * Access token carries {sub, username}; refresh cookie is scoped to /api/auth/refresh 
+//    with Secure+HttpOnly+SameSite=None.
+
 import jwt from "jsonwebtoken";
 
 /** Signers */
@@ -38,8 +45,6 @@ export function setRefreshCookie(res, refreshToken) {
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days (matches default)
   });
 }
-
-
 
 export function clearRefreshCookie(res) {
   res.clearCookie("rt", { path: "/api/auth/refresh" });

@@ -226,7 +226,7 @@ export default function AdminHome() {
         <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
           <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
             <tr>
-              <th className="px-6 py-3">ID</th>
+              {/* <th className="px-6 py-3">ID</th> */}
               <th className="px-6 py-3">Username</th>
               <th className="px-6 py-3">
                 <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ export default function AdminHome() {
           <tbody>
             {/* Inline "add new" row at the top */}
             <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
-              <td className="px-6 py-3 text-gray-400">—</td>
+              {/* <td className="px-6 py-3 text-gray-400">—</td> */}
               <td className="px-6 py-3">
                 <input
                   className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
@@ -290,10 +290,10 @@ export default function AdminHome() {
               </td>
               <td className="px-6 py-3">
 
-                <label class="inline-flex items-center cursor-pointer">
-                  <input type="checkbox" value="" class="sr-only peer" checked={!!newUser.active}
+                <label className="inline-flex items-center cursor-pointer">
+                  <input type="checkbox" value="" className="sr-only peer" checked={!!newUser.active}
                     onChange={(e) => changeNew("active", e.target.checked)} />
-                  <div class="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
+                  <div className="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
                 </label>
 
               </td>
@@ -319,7 +319,7 @@ export default function AdminHome() {
                   key={row.id}
                   className="bg-white border-b border-gray-200"
                 >
-                  <td className="px-6 py-4">{row.id}</td>
+                  {/* <td className="px-6 py-4">{row.id}</td> */}
 
                   <td className="px-6 py-4">
                     <input
@@ -362,10 +362,10 @@ export default function AdminHome() {
                   </td>
 
                   <td className="px-6 py-4">
-                <label class="inline-flex items-center cursor-pointer">
-                  <input type="checkbox" value="" class="sr-only peer" checked={!!row.active}
+                <label className="inline-flex items-center cursor-pointer">
+                  <input type="checkbox" value="" className="sr-only peer" checked={!!row.active}
                     onChange={(e) => changeRow(row.id, "active", e.target.checked)} />
-                  <div class="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
+                  <div className="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
                 </label>
                   </td>
 

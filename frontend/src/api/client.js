@@ -1,3 +1,8 @@
+// src/api/client.js
+//  * Preconfigured Axios instance for all API calls.
+//  * Attaches in-memory access token; on 401, calls /auth/refresh and retries queued requests.
+//  * Central place for baseURL and withCredentials.
+
 import axios from "axios";
 
 /** In-memory access token */

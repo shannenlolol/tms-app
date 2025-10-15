@@ -1,3 +1,7 @@
+// routes/users.routes.js
+//  * Admin-style user management routes.
+//  * GET/POST /api/users, PUT /api/users/:id, PATCH /api/users/:id/active.
+ 
 import { Router } from "express";
 import * as users from "../controllers/users.controller.js"; // note: * as users
 import { ensureAuth } from "../middleware/jwt.js";

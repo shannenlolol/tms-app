@@ -1,3 +1,7 @@
+// routes/groups.routes.js
+//  * Simple group catalogue: list all group names, create a new group.
+//  * GET /api/groups, POST /api/groups (handles duplicate names gracefully).
+
 import { Router } from "express";
 import pool from "../models/db.js"; // mysql2/promise pool
 
