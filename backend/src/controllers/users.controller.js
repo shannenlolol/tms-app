@@ -177,20 +177,7 @@ export async function update(req, res, next) {
     if (!Number.isInteger(targetId) || targetId <= 0) {
       return res.status(400).send("Invalid eeeid");
     }
-
     console.log("update(): targetId =", targetId, "req.user =", req.user);
-
-
-    // Authorisation: admins can edit anyone; non-admins can only edit themselves
-    const me = req.user; // from ensureAuth
-    const myGroups = Array.isArray(me?.usergroups)
-      ? me.usergroups
-      : toArray(me?.usergroups);
-    const isAdmin = myGroups.includes("Admin");
-    const isSelf = me?.id === targetId;
-    // if (!isAdmin && !isSelf) {
-    //   return res.status(403).send("Not allowed");
-    // }
 
     // Inputs
     const {
@@ -263,6 +250,22 @@ export async function update(req, res, next) {
     next(e);
   }
 }
+export async function checkGroup(username, groupName) {
+  const uname = String(username || "").trim();
+  const name  = String(groupName || "").trim().toLowerCase();
+  if (!uname || !name) return false;
+
+  // Case-insensitive username match (safer if DB collation differs)
+  const [[row]] = await pool.query(
+    "SELECT usergroups FROM accounts WHERE username = ? LIMIT 1",
+    [uname]
+  );
+  if (!row) return false;
+
+  const groups = toArray(row.usergroups).map((g) => g.toLowerCase());
+  return groups.includes(name);
+}
+
 
 
 /** PATCH /api/users/:id/active */
@@ -272,16 +275,6 @@ export async function patchActive(req, res, next) {
     if (!Number.isInteger(targetId) || targetId <= 0) {
       return res.status(400).send("Invalid id");
     }
-
-    const me = req.user;
-    const myGroups = Array.isArray(me?.usergroups)
-      ? me.usergroups
-      : toArray(me?.usergroups);
-    const isAdmin = myGroups.includes("Admin");
-    const isSelf = me?.id === targetId;
-    // if (!isAdmin && !isSelf) {
-    //   return res.status(403).send("Not allowed");
-    // }
 
     const { active } = req.body ?? {};
     await pool.query("UPDATE accounts SET active=? WHERE id=? LIMIT 1", [

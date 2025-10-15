@@ -7,6 +7,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pool from "../models/db.js";
 import { makeAccessToken, makeRefreshToken, setRefreshCookie, clearRefreshCookie } from "../middleware/jwt.js";
+import { checkGroup } from "./users.controller.js";
 
 // tiny helper: DB CSV/string -> array
 const toArray = (v) => String(v ?? "").split(",").map(s => s.trim()).filter(Boolean);
@@ -44,6 +45,13 @@ export const login = async (req, res, next) => {
 
     setRefreshCookie(res, refreshToken);
     const groups = toArray(user.usergroups);
+
+    let isAdmin = false;
+    try {
+      isAdmin = await checkGroup(user.username, "Admin");
+    } catch {
+      isAdmin = groups.includes("Admin");
+    }
 
     return res.json({
       ok: true,

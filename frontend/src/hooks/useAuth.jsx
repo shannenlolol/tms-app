@@ -46,8 +46,8 @@ useEffect(() => {
 }, []);
 
   const value = useMemo(() => {
-    const groups =  user?.groups ?? user?.usergroup ?? [];
     const isActive = user?.active !== 0 && user?.active !== false;
+    const groups =  user?.groups ?? user?.usergroup ?? [];
     const inferredAdmin = groups.includes("Admin");
     const isAdmin = user == null ? null : Boolean(user?.isAdmin ?? inferredAdmin);
 
