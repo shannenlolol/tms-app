@@ -88,6 +88,20 @@ button:focus-visible {
     background-color: #a09ccd;
   }
 
-  button.btn-alt { background-color: #ffffff; }
+  button.btn-alt { background-color: #ffffff; border-color: #e3e3e3;}
   button.btn-dark { background-color: #462d6e; }
+  /* Disabled state */
+  button:disabled,
+  button[disabled] {
+    background-color: #e5e7eb; /* gray-200/300-ish */
+    color: #6b7280;            /* gray-500 */
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  button:disabled:hover,
+  button:disabled:focus {
+    background-color: #e5e7eb;
+    outline: 0;
+  }
 }

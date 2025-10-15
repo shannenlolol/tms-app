@@ -21,7 +21,7 @@ export default function Login() {
       nav("/admin", { replace: true });
     } catch (e) {
       setErr(e?.response?.data?.message || "Login failed");
-       setMsg(err.message || "Login failed");
+      setMsg("Login failed");
     }finally {
       setBusy(false);
     }
