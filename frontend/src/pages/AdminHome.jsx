@@ -103,7 +103,6 @@ function UserGroupPicker({ value = [], onChange, options, placeholder = "Select"
                     onChange(value.filter((v) => v !== name));
                   }}
                   className="cursor-pointer rounded-full px-1 hover:bg-blue-200"
-                  aria-label={`Remove ${name}`}
                   title={`Remove ${name}`}
                 >
                   ×
@@ -163,6 +162,7 @@ export default function AdminHome() {
   const [msg, setMsg] = useState("");
   const [ok, setOk] = useState("");
   const [newUser, setNewUser] = useState(emptyNew);
+  const [newGroupName, setNewGroupName] = useState("");
 
   // transient banners
   useEffect(() => {
@@ -327,6 +327,30 @@ export default function AdminHome() {
     }
   };
 
+  const addUserGroupFromInput = async () => {
+    const name = (newGroupName || "").trim();
+    if (!name) return; // no-op for empty
+
+    if (!nameValid(name)) {
+      setMsg(`Group name must be 1–${NAME_MAX} valid characters.`);
+      return;
+    }
+    const exists = groupOptions.some((g) => g.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      setMsg("That user group already exists.");
+      return;
+    }
+
+    try {
+      const createdName = await createUserGroup(name);
+      setGroupOptions((opts) => [...opts, createdName].sort((a, b) => a.localeCompare(b)));
+      setOk(`“${createdName}” added.`);
+      setNewGroupName("");
+    } catch (e) {
+      setMsg(e.message || "Failed to add user group");
+    }
+  };
+
   return (
     <div className="p-4">
       {msg && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">{msg}</div>}
@@ -340,17 +364,32 @@ export default function AdminHome() {
               <th className="px-6 py-3">Username</th>
               <th className="px-6 py-3">
                 <div className="flex items-center gap-2">
-                  <span>User Group</span>
-                  <button
-                    type="button"
-                    onClick={onAddUserGroup}
-                    className="rounded-md bg-blue-600 text-white px-2 py-1 text-[11px] hover:bg-blue-700"
-                    title="Create a new user group"
-                  >
-                    + New
-                  </button>
+                  <span className="whitespace-nowrap">USER GROUP</span>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addUserGroupFromInput();
+                      }}
+                      placeholder="+ New group"
+                      className="h-8 w-40 rounded-md border border-gray-300 bg-white px-2 text-sm outline-none focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={addUserGroupFromInput}
+                      disabled={!newGroupName.trim()}
+                      className="h-8 rounded-md bg-indigo-500 px-3 text-xs font-medium text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Create a new user group"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
               </th>
+
               <th className="px-6 py-3">Email</th>
               <th className="px-6 py-3">Password</th>
               <th className="px-6 py-3">Active</th>

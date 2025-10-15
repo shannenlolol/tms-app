@@ -3,8 +3,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import "dotenv/config";
-import { ensureAuth } from "./middleware/jwt.js"; // adjust path if different
-
+import { ensureAuth } from "./middleware/jwt.js"; 
 import authRoutes from "./routes/auth.routes.js";
 import usersRoutes from "./routes/users.routes.js";
 import groupRoutes from "./routes/groups.routes.js";
