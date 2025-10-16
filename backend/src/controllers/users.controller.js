@@ -294,52 +294,9 @@ export async function checkGroup(username, groupName) {
 }
 
 
-
-/** PATCH /api/users/:username/active */
-export async function patchActive(req, res, next) {
-  try {
-    const targetUsername = req.params.username;
-    const check = enforceHardcodedAdmin({ targetUsername, body: { active: (req.body || {}).active } });
-
-    if (!check.ok) {
-      return res.status(check.status || 409).json({
-        ok: false,
-        code: check.code || "POLICY_VIOLATION",
-        message: check.message,
-      });
-    }
-    if (!Number.isInteger(targetUsername) || targetUsername <= 0) {
-      return res.status(400).send("Invalid username");
-    }
-
-    const { active } = req.body ?? {};
-    await pool.query("UPDATE accounts SET active=? WHERE username=? LIMIT 1", [
-      active ? 1 : 0,
-      targetUsername,
-    ]);
-
-    const [[row]] = await pool.query(
-      "SELECT username, email, active, usergroups FROM accounts WHERE username=? LIMIT 1",
-      [targetUsername]
-    );
-    if (!row) return res.status(404).send("User not found");
-
-    res.json({
-      username: row.username,
-      email: row.email ?? "",
-      usergroup: toArray(row.usergroups),
-      active: !!row.active,
-    });
-  } catch (e) {
-    next(e);
-  }
-}
-
-
 // ---- Frontend compatibility aliases ----
 export const getUsers = list;
 export const createUser = create;
 export const updateUser = update;
-export const toggleActive = patchActive;
 
-export default { list, create, update, patchActive };
+export default { list, create, update };

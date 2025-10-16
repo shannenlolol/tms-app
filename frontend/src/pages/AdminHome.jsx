@@ -60,7 +60,7 @@ const nameValid = (s) => {
 };
 
 /** Dropdown multi-select with checkbox list + removable tags in the control */
-function UserGroupPicker({ value = [], onChange, options, placeholder = "Select" }) {
+function UserGroupPicker({ value = [], onChange, options }) {
   const [open, setOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
 
@@ -90,7 +90,7 @@ function UserGroupPicker({ value = [], onChange, options, placeholder = "Select"
         className="btn-alt w-full min-h-[34px] rounded-md border-gray-300 px-2 py-1 text-left focus:outline-none focus:ring flex items-center gap-2 flex-wrap"
       >
         {value.length === 0 ? (
-          <span className="text-gray-400">{placeholder}</span>
+          <span className="text-gray-400"></span>
         ) : (
           <>
             {value.map((name) => (

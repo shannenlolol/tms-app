@@ -51,7 +51,6 @@ app.use("/api/current", ensureAuth, selfRoutes);
 //   GET    /api/users         -> list users
 //   POST   /api/users         -> create user
 //   PUT    /api/users/:username     -> update user by username
-//   PATCH  /api/users/:username/active -> enable/disable account
 app.use("/api/users", ensureAuth, usersRoutes);
 
 // Groups:

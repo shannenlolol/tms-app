@@ -7,7 +7,7 @@ import { ensureAuth } from "../middleware/jwt.js";
 
 const router = Router();
 
-router.post("/login", login);                 // POST /api/auth
+router.post("/login", login);                 // POST /api/auth/loginBear
 router.get("/check", ensureAuth, check); // GET  /api/auth/check
 router.get("/refresh", refresh);         // GET  /api/auth/refresh 
 router.post("/logout", logout);          // POST /api/auth/logout

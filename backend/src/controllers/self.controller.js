@@ -16,7 +16,44 @@ const pwdOk = (s) =>
   /[A-Za-z]/.test(s) &&
   /\d/.test(s) &&
   /[^A-Za-z0-9]/.test(s);
-  
+
+
+// Ensure email uniqueness (case-insensitive email)
+async function assertUniqueEmail({ email}) {
+  const emailLc = String(email || "").toLowerCase();
+  const params = [emailLc];
+
+  let sql =
+    "SELECT email FROM accounts " +
+    "WHERE (LOWER(email) = ?)";
+
+  sql += " LIMIT 1";
+
+  const [rows] = await pool.query(sql, params);
+
+  if (!rows.length) {
+    return { ok: true };
+  }
+
+  const row = rows[0];
+  if (String(row.email || "").toLowerCase() === emailLc) {
+    console.log(emailLc, row.email, "sadasdad");
+    return {
+      ok: false,
+      field: "email",
+      code: "EMAIL_TAKEN",
+      message: `Email '${emailLc}' is already in use.`,
+    };
+  }
+  return {
+    ok: false,
+    field: "unknown",
+    code: "UNIQUE_CONSTRAINT",
+    message: "Email is already in use.",
+  };
+}
+
+
 /** GET /api/users/current */
 export async function getCurrentUser(req, res) {
   const username = req.user?.username;
@@ -64,6 +101,15 @@ export async function updateCurrentUser(req, res) {
   if (emailChanged) {
     if (!emailOk(email)) {
       return res.status(400).json({ message: "Email must be valid." });
+    }
+    const uniq = await assertUniqueEmail({ email: email });
+    if (!uniq.ok) {
+      return res.status(409).json({
+        ok: false,
+        code: uniq.code,
+        field: uniq.field,
+        message: uniq.message,
+      });
     }
     updates.push("email = ?");
     params.push(email.toLowerCase());
