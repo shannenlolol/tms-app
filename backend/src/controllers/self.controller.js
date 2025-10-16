@@ -65,8 +65,6 @@ export async function updateCurrentUser(req, res) {
     if (!emailOk(email)) {
       return res.status(400).json({ message: "Email must be valid." });
     }
-    // OPTIONAL: enforce uniqueness gracefully (if DB unique index exists,
-    // catch ER_DUP_ENTRY below instead of pre-checking)
     updates.push("email = ?");
     params.push(email.toLowerCase());
   }
@@ -105,10 +103,6 @@ export async function updateCurrentUser(req, res) {
       params
     );
   } catch (err) {
-    // Friendly duplicate-email message if unique index triggers
-    if (err?.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ message: "Email already in use." });
-    }
     throw err;
   }
 

@@ -43,17 +43,5 @@ export function enforceHardcodedAdmin({ targetUsername, body }) {
       };    }
   }
 
-  // 3) Optional: forbid renaming "admin"
-  if (Object.prototype.hasOwnProperty.call(body, "username")) {
-    const desired = String(body.username || "").trim().toLowerCase();
-    if (desired !== "admin") {
-      return {
-        ok: false,
-        status: 409,
-        code: "ADMIN_CANNOT_RENAME",
-        message: 'Renaming the hardcoded "admin" account is not allowed.',
-      };    }
-  }
-
   return { ok: true };
 }

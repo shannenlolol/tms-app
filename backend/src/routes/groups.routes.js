@@ -17,14 +17,9 @@ r.get("/", async (req, res) => {
 r.post("/", async (req, res) => {
   const name = String(req.body?.name || "").trim();
   if (!name) return res.status(400).json({ message: "Name is required" });
-
   try {
     await pool.query("INSERT INTO user_groups (name) VALUES (?)", [name]);
   } catch (e) {
-    // handle duplicate nicely
-    if (e.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ message: "Group already exists" });
-    }
     throw e;
   }
   res.status(201).json({ name });

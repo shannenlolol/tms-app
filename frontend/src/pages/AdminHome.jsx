@@ -335,7 +335,6 @@ export default function AdminHome() {
   const POLICY_REFRESH_CODES = new Set([
     "ADMIN_CANNOT_DISABLE",
     "ADMIN_MUST_KEEP_GROUP",
-    "ADMIN_CANNOT_RENAME",
   ]);
 
   // call it in the initial effect

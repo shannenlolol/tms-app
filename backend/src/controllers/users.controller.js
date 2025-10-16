@@ -1,7 +1,7 @@
 /* controllers/users.controller.js
  * CRUD for accounts: list, create, update, toggle active; normalises usergroups CSV ⇄ array and validates inputs.
  * Enforces basic uniqueness, password policy, and group validity against user_groups.
- */ 
+ */
 
 import pool from "../models/db.js";
 import bcrypt from "bcrypt";
@@ -63,6 +63,7 @@ async function normaliseGroups(input) {
 }
 
 // Ensure username/email uniqueness (case-insensitive email)
+// !! excludeUsername for update (since can't edit username, just ensure email is unique)
 async function assertUniqueUsernameEmail({ username, email, excludeUsername = null }) {
   const emailLc = String(email || "").toLowerCase();
   const params = [username, emailLc];
@@ -70,15 +71,12 @@ async function assertUniqueUsernameEmail({ username, email, excludeUsername = nu
   let sql =
     "SELECT username, email FROM accounts " +
     "WHERE (username = ? OR LOWER(email) = ?)";
-  if (excludeUsername != null) {
-    sql += " AND username <> ?";
-    params.push(excludeUsername);
-  }
+
   sql += " LIMIT 1";
 
   const [rows] = await pool.query(sql, params);
 
-  if (!rows.length) {
+  if (!rows.length || excludeUsername) {
     return { ok: true };
   }
 
@@ -201,7 +199,6 @@ export async function create(req, res, next) {
 export async function update(req, res, next) {
   try {
     // target username comes from URL, not the logged-in user
-    
     const targetUsername = req.params.username;
     const check = enforceHardcodedAdmin({ targetUsername, body: req.body || {} });
     if (!check.ok) {
@@ -224,17 +221,11 @@ export async function update(req, res, next) {
     const usernameDb = String(username || "").trim();
     const emailDb = String(email || "").trim().toLowerCase(); // normalise email
 
-    // Required fields (password is optional)
-    if (!usernameDb || !emailDb || !Array.isArray(usergroup) || usergroup.length === 0) {
-      return res
-        .status(400)
-        .send("Username, email and at least one user group are required.");
-    }
     if (!emailOk(emailDb)) {
       return res.status(400).send("Email must be valid.");
     }
 
-    const uniq = await assertUniqueUsernameEmail({ username: usernameDb, email: emailDb });
+    const uniq = await assertUniqueUsernameEmail({ username: usernameDb, email: emailDb, excludeUsername: true });
     if (!uniq.ok) {
       return res.status(409).json({
         ok: false,
@@ -288,7 +279,7 @@ export async function update(req, res, next) {
 }
 export async function checkGroup(username, groupName) {
   const uname = String(username || "").trim();
-  const name  = String(groupName || "").trim().toLowerCase();
+  const name = String(groupName || "").trim().toLowerCase();
   if (!uname || !name) return false;
 
   // Case-insensitive username match (safer if DB collation differs)
@@ -309,15 +300,15 @@ export async function patchActive(req, res, next) {
   try {
     const targetUsername = req.params.username;
     const check = enforceHardcodedAdmin({ targetUsername, body: { active: (req.body || {}).active } });
-    
+
     if (!check.ok) {
       return res.status(check.status || 409).json({
         ok: false,
         code: check.code || "POLICY_VIOLATION",
         message: check.message,
       });
-    }    
-if (!Number.isInteger(targetUsername) || targetUsername <= 0) {
+    }
+    if (!Number.isInteger(targetUsername) || targetUsername <= 0) {
       return res.status(400).send("Invalid username");
     }
 
