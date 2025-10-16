@@ -10,12 +10,12 @@ import jwt from "jsonwebtoken";
 /** Signers */
 export function makeAccessToken(user) {
   // keep payload tiny; put only what you need on every request
-  return jwt.sign({ sub: user.id, username: user.username }, process.env.ACCESS_TOKEN_SECRET, {
+  return jwt.sign({ username: user.username }, process.env.ACCESS_TOKEN_SECRET, {
     expiresIn: process.env.ACCESS_TOKEN_TTL || "15m",
   });
 }
 export function makeRefreshToken(user) {
-  return jwt.sign({ sub: user.id }, process.env.REFRESH_TOKEN_SECRET, {
+  return jwt.sign({ username: user.username  }, process.env.REFRESH_TOKEN_SECRET, {
     expiresIn: process.env.REFRESH_TOKEN_TTL || "7d",
   });
 }
@@ -28,7 +28,7 @@ export function ensureAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    req.user = { id: payload.sub, username: payload.username };
+    req.user = { username: payload.username };
     return next();
   } catch (e) {
     return res.status(401).json({ message: "Invalid or expired access token" });

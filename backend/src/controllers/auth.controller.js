@@ -24,7 +24,7 @@ export const login = async (req, res, next) => {
 
     // Accept both schemas: password or password_hash
     const [rows] = await pool.query(
-      `SELECT id, username, password AS password_hash, active, usergroups
+      `SELECT username, password AS password_hash, active, usergroups
          FROM accounts
         WHERE username = ? AND active = 1
         LIMIT 1`,
@@ -40,8 +40,8 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ ok: false, message: "Incorrect Username and/or Password!" });
     }
 
-    const accessToken = makeAccessToken({ id: user.id, username: user.username });
-    const refreshToken = makeRefreshToken({ id: user.id });
+    const accessToken = makeAccessToken({ username: user.username });
+    const refreshToken = makeRefreshToken({ username: user.username });
 
     setRefreshCookie(res, refreshToken);
     const groups = toArray(user.usergroups);
@@ -56,7 +56,7 @@ export const login = async (req, res, next) => {
     return res.json({
       ok: true,
       accessToken,
-      user: { id: user.id, username: user.username, groups, isAdmin: groups.includes("Admin") },
+      user: {username: user.username, groups, isAdmin: groups.includes("Admin") },
     });
   } catch (err) {
     console.error("Auth login error:", err);
@@ -70,7 +70,7 @@ export const refresh = (req, res) => {
   if (!token) return res.status(401).json({ ok: false, message: "Missing refresh token" });
   try {
     const payload = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
-    const accessToken = makeAccessToken({ id: payload.sub, username: payload.username });
+    const accessToken = makeAccessToken({username: payload.username });
     return res.json({ ok: true, accessToken });
   } catch {
     return res.status(401).json({ ok: false, message: "Invalid or expired refresh token" });

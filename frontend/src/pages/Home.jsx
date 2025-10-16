@@ -4,9 +4,10 @@ import { getUserGroups, createUserGroup } from "../api/groups";
 import { useAuth } from "../hooks/useAuth";
 
 // ---- helpers ----
-const sortByIdAsc = (arr) =>
-  [...arr].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
-
+const sortByUsernameAsc = (arr) =>
+  [...arr].sort((a, b) =>
+  String(a?.username ?? "").localeCompare(String(b?.username ?? ""), undefined, { sensitivity: "base" })
+);
 const pwdValid = (s) =>
   typeof s === "string" &&
   s.length >= 8 &&
@@ -125,7 +126,7 @@ export default function Home() {
         setLoading(true);
         const [users, groups] = await Promise.all([getUsers(), getUserGroups()]);
         // Map backend (array usergroup) -> UI fields; ensure password empty for inline editing
-        const mapped = sortByIdAsc(users).map((u) => ({
+        const mapped = sortByUsernameAsc(users).map((u) => ({
           ...u,
           usergroupStr: Array.isArray(u.usergroup) ? (u.usergroup[0] || "") : String(u.usergroup || ""),
           password: "", // empty -> "(leave blank to keep)"
@@ -141,8 +142,8 @@ export default function Home() {
   }, [ready, isAuthenticated]);
 
   // inline edits (always-on editing)
-  const changeRow = (id, key, value) =>
-    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
+  const changeRow = (username, key, value) =>
+    setRows((rs) => rs.map((r) => (r.username === username ? { ...r, [key]: value } : r)));
 
   const saveRow = async (row) => {
     // validate
@@ -161,7 +162,7 @@ export default function Home() {
     if (row.password) payload.password = row.password;
 
     try {
-      const updated = await updateUser(row.id, payload);
+      const updated = await updateUser(row.username, payload);
       // normalise back into our UI shape
       const safe = {
         ...row,
@@ -171,7 +172,7 @@ export default function Home() {
           : (row.usergroupStr || ""),
         password: "", // clear after save
       };
-      setRows((rs) => rs.map((r) => (r.id === row.id ? safe : r)));
+      setRows((rs) => rs.map((r) => (r.username === row.username ? safe : r)));
       setOk("Update successful.");
     } catch (e) {
       console.error("Row update failed:", e?.response?.status, e?.response?.data);
@@ -206,7 +207,7 @@ export default function Home() {
         usergroupStr: Array.isArray(created.usergroup) ? (created.usergroup[0] || "") : "",
         password: "",
       };
-      setRows((rs) => sortByIdAsc([...rs, mapped]));
+      setRows((rs) => sortByUsernameAsc([...rs, mapped]));
       setNewUser(emptyNew);
       setOk("User created.");
     } catch (e) {
@@ -316,10 +317,10 @@ export default function Home() {
             ) : (
               rows.map((row) => (
                 <tr
-                  key={row.id}
+                  key={row.username}
                   className="bg-white border-b border-gray-200"
                 >
-                  <td className="px-6 py-4">{row.id}</td>
+                  <td className="px-6 py-4">{row.username}</td>
 
                   <td className="px-6 py-4">
                     <input
@@ -327,7 +328,7 @@ export default function Home() {
                       className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                       value={row.username ?? ""}
-                      onChange={(e) => changeRow(row.id, "username", e.target.value)}
+                      onChange={(e) => changeRow(row.username, "username", e.target.value)}
                       autoComplete="off"
                     />
                   </td>
@@ -338,7 +339,7 @@ export default function Home() {
                       className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                       value={row.username ?? ""}
-                      onChange={(e) => changeRow(row.id, "username", e.target.value)}
+                      onChange={(e) => changeRow(row.username, "username", e.target.value)}
                       autoComplete="off"
                     />
                   </td>

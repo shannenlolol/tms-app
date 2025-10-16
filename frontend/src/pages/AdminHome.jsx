@@ -4,8 +4,10 @@ import { getUserGroups, createUserGroup } from "../api/groups";
 import { useAuth } from "../hooks/useAuth";
 
 // ---- helpers ----
-const sortByIdAsc = (arr) =>
-  [...arr].sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+const sortByUsernameAsc = (arr) =>
+  [...arr].sort((a, b) =>
+    String(a?.username ?? "").localeCompare(String(b?.username ?? ""), undefined, { sensitivity: "base" })
+  );
 
 // Normalise for comparison (trim/lower email, sort groups)
 const normUserShape = (u) => ({
@@ -184,14 +186,14 @@ export default function AdminHome() {
         setLoading(true);
         const [users, groups] = await Promise.all([getUsers(), getUserGroups()]);
         // Map backend (array usergroup) -> UI fields; ensure password empty for inline editing
-        const mapped = sortByIdAsc(users).map((u) => ({
+        const mapped = sortByUsernameAsc(users).map((u) => ({
           ...u,
           usergroup: asArray(u.usergroup),
           password: "", // empty -> "(leave blank to keep)"
         }));
         setRows(mapped);
         setGroupOptions(groups);
-        const nextMap = new Map(mapped.map((u) => [u.id, normUserShape(u)]));
+        const nextMap = new Map(mapped.map((u) => [u.username, normUserShape(u)]));
         setOrigById(nextMap);
 
       } catch (e) {
@@ -206,15 +208,15 @@ export default function AdminHome() {
     // Any non-empty password counts as a change
     if ((row.password ?? "").length > 0) return true;
 
-    const orig = origById.get(row.id);
+    const orig = origById.get(row.username);
     // If don't have a snapshot yet (e.g., just created), treat as clean
     if (!orig) return false;
 
     return !isSameUser(normUserShape(row), orig);
   };
   // inline edits (always-on editing)
-  const changeRow = (id, key, value) =>
-    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
+  const changeRow = (username, key, value) =>
+    setRows((rs) => rs.map((r) => (r.username === username ? { ...r, [key]: value } : r)));
 
   const saveRow = async (row) => {
     // validate
@@ -239,7 +241,7 @@ export default function AdminHome() {
     if (row.password) payload.password = row.password;
 
     try {
-      const updated = await updateUser(row.id, payload);
+      const updated = await updateUser(row.username, payload);
       // normalise back into our UI shape
       const safe = {
         ...row,
@@ -247,20 +249,23 @@ export default function AdminHome() {
         usergroup: asArray(updated.usergroup),
         password: "", // clear after save
       };
-      setRows((rs) => rs.map((r) => (r.id === row.id ? safe : r)));
+      setRows((rs) => rs.map((r) => (r.username === row.username ? safe : r)));
       setOrigById((m) => {
         const copy = new Map(m);
-        copy.set(row.id, normUserShape(safe));
+        copy.set(row.username, normUserShape(safe));
         return copy;
       });
       setOk("Update successful.");
     } catch (e) {
-      console.error("Row update failed:", e?.response?.status, e?.response?.data);
+      console.log(e.message, e.response)
+      const code = e?.response?.data?.code;
       const m =
         (typeof e?.response?.data === "string" ? e.response.data : e?.response?.data?.message) ||
-        e.message ||
-        "Update failed";
+        e.message || "Update failed";
       setMsg(m);
+      if (POLICY_REFRESH_CODES.has(code)) {
+        reloadUsers();
+      }
     }
   };
 
@@ -294,38 +299,51 @@ export default function AdminHome() {
         usergroup: asArray(created.usergroup),
         password: "",
       };
-      setRows((rs) => sortByIdAsc([...rs, mapped]));
+      setRows((rs) => sortByUsernameAsc([...rs, mapped]));
       setOrigById((m) => {
         const copy = new Map(m);
-        // assumes `created` (and thus `mapped`) includes the DB id
-        copy.set(mapped.id, normUserShape(mapped));
+        // assumes `created` (and thus `mapped`) includes the DB username
+        copy.set(mapped.username, normUserShape(mapped));
         return copy;
       });
       setNewUser(emptyNew);
       setOk("User created.");
     } catch (e) {
-      setMsg(e.message || "Create failed");
+      setMsg(e?.response?.data?.message || e.message || "Create failed");
     }
   };
 
-  // add user group (+ New)
-  const onAddUserGroup = async () => {
-    const name = (prompt("Enter new user group name:") || "").trim();
-    if (!name) return;
-    if (!nameValid(name)) {
-      return setMsg(`Group name must be 1–${NAME_MAX} valid characters.`);
-    }
-    const exists = groupOptions.some((g) => g.toLowerCase() === name.toLowerCase());
-    if (exists) return setMsg("That user group already exists.");
-
+  const reloadUsers = async () => {
     try {
-      const createdName = await createUserGroup(name);
-      setGroupOptions((opts) => [...opts, createdName].sort((a, b) => a.localeCompare(b)));
-      setOk(`“${createdName}” added.`);
+      setLoading(true);
+      const [users, groups] = await Promise.all([getUsers(), getUserGroups()]);
+      const mapped = sortByUsernameAsc(users).map((u) => ({
+        ...u,
+        usergroup: asArray(u.usergroup),
+        password: "",
+      }));
+      setRows(mapped);
+      setGroupOptions(groups);
+      const nextMap = new Map(mapped.map((u) => [u.username, normUserShape(u)]));
+      setOrigById(nextMap);
     } catch (e) {
-      setMsg(e.message || "Failed to add user group");
+      setMsg(e?.response?.data?.message || e.message || "Failed to load users");
+    } finally {
+      setLoading(false);
     }
   };
+  const POLICY_REFRESH_CODES = new Set([
+    "ADMIN_CANNOT_DISABLE",
+    "ADMIN_MUST_KEEP_GROUP",
+    "ADMIN_CANNOT_RENAME",
+  ]);
+
+  // call it in the initial effect
+  useEffect(() => {
+    if (!ready || !isAuthenticated) return;
+    reloadUsers();
+  }, [ready, isAuthenticated]);
+
 
   const addUserGroupFromInput = async () => {
     const name = (newGroupName || "").trim();
@@ -360,7 +378,6 @@ export default function AdminHome() {
         <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
           <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
             <tr>
-              {/* <th className="px-6 py-3">ID</th> */}
               <th className="px-6 py-3">Username</th>
               <th className="px-6 py-3">
                 <div className="flex items-center gap-2">
@@ -464,22 +481,25 @@ export default function AdminHome() {
             ) : (
               rows.map((row) => (
                 <tr
-                  key={row.id}
+                  key={row.username}
                   className="bg-white border-b border-gray-200"
                 >
-                  <td className="px-6 py-4">
+                  {/* <td className="px-6 py-4">
                     <input
                       className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                       value={row.username ?? ""}
-                      onChange={(e) => changeRow(row.id, "username", e.target.value)}
+                      onChange={(e) => changeRow(row.username, "username", e.target.value)}
                       autoComplete="off"
                     />
+                  </td> */}
+                  <td className="px-6 py-4">
+                    <span className="whitespace-nowrap">{row.username || "—"}</span>
                   </td>
                   <td className="px-6 py-4">
                     <UserGroupPicker
                       value={asArray(row.usergroup)}
-                      onChange={(arr) => changeRow(row.id, "usergroup", arr)}
+                      onChange={(arr) => changeRow(row.username, "usergroup", arr)}
                       options={groupOptions}
                     />
                   </td>
@@ -488,7 +508,7 @@ export default function AdminHome() {
                       className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                       value={row.email ?? ""}
-                      onChange={(e) => changeRow(row.id, "email", e.target.value)}
+                      onChange={(e) => changeRow(row.username, "email", e.target.value)}
                       autoComplete="off"
                     />
                   </td>
@@ -498,7 +518,7 @@ export default function AdminHome() {
                       className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                       value={row.password || ""}
-                      onChange={(e) => changeRow(row.id, "password", e.target.value)}
+                      onChange={(e) => changeRow(row.username, "password", e.target.value)}
                       placeholder="*********"
                       autoComplete="off"
                     />
@@ -506,7 +526,7 @@ export default function AdminHome() {
                   <td className="px-6 py-4">
                     <label className="inline-flex items-center cursor-pointer">
                       <input type="checkbox" value="" className="sr-only peer" checked={!!row.active}
-                        onChange={(e) => changeRow(row.id, "active", e.target.checked)} />
+                        onChange={(e) => changeRow(row.username, "active", e.target.checked)} />
                       <div className="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
                     </label>
                   </td>

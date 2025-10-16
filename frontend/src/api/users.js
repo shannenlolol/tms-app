@@ -1,6 +1,6 @@
 // src/api/users.js
 //  * Users API helpers: current user + admin CRUD.
-//  * Endpoints: GET /users/current, GET/POST /users, PUT /users/:id, PATCH /users/:id/active.
+//  * Endpoints: GET /users/current, GET/POST /users, PUT /users/:username, PATCH /users/:username/active.
 //  * Exports: getCurrentUser(), updateCurrentUser(), getUsers(), createUser(), updateUser(), toggleActive().
 
 import http from "./client";
@@ -18,6 +18,6 @@ export const updateCurrentUser = async (payload) =>
 // Admin endpoints
 export const getUsers = async () => (await http.get("/users")).data;
 export const createUser = async (body) => (await http.post("/users", body)).data;
-export const updateUser = async (id, body) => (await http.put(`/users/${id}`, body)).data;
-export const toggleActive = async (id, body) =>
-  (await http.patch(`/users/${id}/active`, body)).data;
+export const updateUser = async (username, body) => (await http.put(`/users/${username}`, body)).data;
+export const toggleActive = async (username, body) =>
+  (await http.patch(`/users/${username}/active`, body)).data;

@@ -19,12 +19,12 @@ const pwdOk = (s) =>
   
 /** GET /api/users/current */
 export async function getCurrentUser(req, res) {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ message: "Unauthenticated" });
+  const username = req.user?.username;
+  if (!username) return res.status(401).json({ message: "Unauthenticated" });
 
   const [rows] = await pool.query(
-    "SELECT id, username, email, usergroups, active FROM accounts WHERE id = ? LIMIT 1",
-    [userId]
+    "SELECT username, email, usergroups, active FROM accounts WHERE username = ? LIMIT 1",
+    [username]
   );
   if (rows.length === 0) return res.status(404).json({ message: "Not found" });
 
@@ -34,13 +34,13 @@ export async function getCurrentUser(req, res) {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  res.json({ id: u.id, username: u.username, email: u.email, usergroup, active: !!u.active });
+  res.json({ username: u.username, email: u.email, usergroup, active: !!u.active });
 }
 
 /** PUT /api/users/current  { email?, currentPassword?, newPassword? } */
 export async function updateCurrentUser(req, res) {
-  const userId = Number(req.user?.id);
-  if (!userId) return res.status(401).json({ message: "Unauthenticated" });
+  const username = req.user?.username;
+  if (!username) return res.status(401).json({ message: "Unauthenticated" });
 
   let { email = "", currentPassword = "", newPassword = "" } = req.body ?? {};
   email = String(email).trim();
@@ -49,8 +49,8 @@ export async function updateCurrentUser(req, res) {
 
   // Load current user (need existing values and hash)
   const [[me]] = await pool.query(
-    "SELECT id, email, password FROM accounts WHERE id = ? LIMIT 1",
-    [userId]
+    "SELECT username, email, password FROM accounts WHERE username = ? LIMIT 1",
+    [username]
   );
   if (!me) return res.status(404).json({ message: "Not found" });
 
@@ -99,9 +99,9 @@ export async function updateCurrentUser(req, res) {
   }
 
   try {
-    params.push(userId);
+    params.push(username);
     await pool.query(
-      `UPDATE accounts SET ${updates.join(", ")} WHERE id = ? LIMIT 1`,
+      `UPDATE accounts SET ${updates.join(", ")} WHERE username = ? LIMIT 1`,
       params
     );
   } catch (err) {
@@ -114,8 +114,8 @@ export async function updateCurrentUser(req, res) {
 
   // Return fresh profile
   const [[u2]] = await pool.query(
-    "SELECT id, username, email, usergroups, active FROM accounts WHERE id = ? LIMIT 1",
-    [userId]
+    "SELECT username, email, usergroups, active FROM accounts WHERE username = ? LIMIT 1",
+    [username]
   );
   const usergroup = String(u2.usergroups || "")
     .split(",")
@@ -123,7 +123,6 @@ export async function updateCurrentUser(req, res) {
     .filter(Boolean);
 
   res.json({
-    id: u2.id,
     username: u2.username,
     email: u2.email ?? "",
     usergroup,

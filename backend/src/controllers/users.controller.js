@@ -5,6 +5,7 @@
 
 import pool from "../models/db.js";
 import bcrypt from "bcrypt";
+import { enforceHardcodedAdmin, hardcodedAdmin } from "../policy/hardcodedAdmin.js";
 
 const ROUNDS = 12; // 10–12 is common
 
@@ -62,34 +63,48 @@ async function normaliseGroups(input) {
 }
 
 // Ensure username/email uniqueness (case-insensitive email)
-async function assertUniqueUsernameEmail({ username, email, excludeId = null }) {
-  const params = [username, email.toLowerCase()];
+async function assertUniqueUsernameEmail({ username, email, excludeUsername = null }) {
+  const emailLc = String(email || "").toLowerCase();
+  const params = [username, emailLc];
+
   let sql =
-    "SELECT id, username, email FROM accounts " +
+    "SELECT username, email FROM accounts " +
     "WHERE (username = ? OR LOWER(email) = ?)";
-  if (excludeId != null) {
-    sql += " AND id <> ?";
-    params.push(excludeId);
+  if (excludeUsername != null) {
+    sql += " AND username <> ?";
+    params.push(excludeUsername);
   }
   sql += " LIMIT 1";
 
   const [rows] = await pool.query(sql, params);
-  if (rows.length) {
-    const taken =
-      rows[0].username === username
-        ? "username"
-        : rows[0].email.toLowerCase() === email.toLowerCase()
-        ? "email"
-        : "email";
-    const value = taken === "username" ? rows[0].username : rows[0].email;
-    const err = new Error(
-      taken === "username"
-        ? `Username '${value}' is already in use.`
-        : `Email '${value}' is already in use.`
-    );
-    err.status = 409;
-    throw err;
+
+  if (!rows.length) {
+    return { ok: true };
   }
+
+  const row = rows[0];
+  if (row.username === username) {
+    return {
+      ok: false,
+      field: "username",
+      code: "USERNAME_TAKEN",
+      message: `Username '${row.username}' is already in use.`,
+    };
+  }
+  if (String(row.email || "").toLowerCase() === emailLc) {
+    return {
+      ok: false,
+      field: "email",
+      code: "EMAIL_TAKEN",
+      message: `Email '${row.email}' is already in use.`,
+    };
+  }
+  return {
+    ok: false,
+    field: "unknown",
+    code: "UNIQUE_CONSTRAINT",
+    message: "Username or email is already in use.",
+  };
 }
 
 
@@ -97,10 +112,9 @@ async function assertUniqueUsernameEmail({ username, email, excludeId = null }) 
 export async function list(_req, res, next) {
   try {
     const [rows] = await pool.query(
-      "SELECT id, username, email, active, usergroups FROM accounts ORDER BY id ASC"
+      "SELECT username, email, active, usergroups FROM accounts"
     );
     const data = rows.map((r) => ({
-      id: r.id,
       username: r.username,
       email: r.email ?? "",
       usergroup: toArray(r.usergroups), // array for the UI
@@ -127,57 +141,76 @@ export async function create(req, res, next) {
     const emailDb = String(email || "").trim();
 
     if (!usernameDb || !emailDb || !password) {
-      return res.status(400).send("username/email/password are required");
+      return res.status(400).json({ ok: false, message: "username/email/password are required" });
     }
     if (!emailOk(emailDb)) {
-      return res.status(400).send("Email must be valid.");
+      return res.status(400).json({ ok: false, message: "Email must be valid." });
     }
     if (!pwdOk(password)) {
-      return res
-        .status(400)
-        .send(
-          "Password must be 8–10 chars, include letters, numbers, and a special character."
-        );
+      return res.status(400).json({
+        ok: false,
+        message: "Password must be 8–10 chars, include letters, numbers, and a special character.",
+      });
     }
 
-    await assertUniqueUsernameEmail({ username: usernameDb, email: emailDb });
+    const uniq = await assertUniqueUsernameEmail({ username: usernameDb, email: emailDb });
+    if (!uniq.ok) {
+      return res.status(409).json({
+        ok: false,
+        code: uniq.code,
+        field: uniq.field,
+        message: uniq.message,
+      });
+    }
 
     const cleanGroups = await normaliseGroups(usergroup);
     const password_hash = await bcrypt.hash(password, ROUNDS);
 
-    const [r] = await pool.query(
+    await pool.query(
       `INSERT INTO accounts (username, password, email, active, usergroups)
        VALUES (?, ?, ?, ?, ?)`,
       [usernameDb, password_hash, emailDb, active ? 1 : 0, toCSV(cleanGroups)]
     );
 
     const [[row]] = await pool.query(
-      "SELECT id, username, email, active, usergroups FROM accounts WHERE id=?",
-      [r.insertId]
+      "SELECT username, email, active, usergroups FROM accounts WHERE username=? LIMIT 1",
+      [usernameDb]
     );
 
     res.status(201).json({
-      id: row.id,
       username: row.username,
       email: row.email ?? "",
       usergroup: toArray(row.usergroups),
       active: !!row.active,
     });
   } catch (e) {
-    if (e.status) return res.status(e.status).send(e.message);
+    if (e.status) {
+      // Keep all errors JSON so the client can show the real message
+      return res.status(e.status).json({
+        ok: false,
+        code: e.code || "ERROR",
+        message: e.message || "Request failed",
+      });
+    }
     next(e);
   }
 }
 
-/** PUT /api/users/:id  (full update; password optional) */
+
+/** PUT /api/users/:username  (full update; password optional) */
 export async function update(req, res, next) {
   try {
-    // target id comes from URL, not the logged-in user
-    const targetId = Number(req.params.id);
-    if (!Number.isInteger(targetId) || targetId <= 0) {
-      return res.status(400).send("Invalid eeeid");
+    // target username comes from URL, not the logged-in user
+    
+    const targetUsername = req.params.username;
+    const check = enforceHardcodedAdmin({ targetUsername, body: req.body || {} });
+    if (!check.ok) {
+      return res.status(check.status || 409).json({
+        ok: false,
+        code: check.code || "POLICY_VIOLATION",
+        message: check.message,
+      });
     }
-    console.log("update(): targetId =", targetId, "req.user =", req.user);
 
     // Inputs
     const {
@@ -201,11 +234,15 @@ export async function update(req, res, next) {
       return res.status(400).send("Email must be valid.");
     }
 
-    await assertUniqueUsernameEmail({
-      username: usernameDb,
-      email: emailDb,
-      excludeId: targetId,
-    });
+    const uniq = await assertUniqueUsernameEmail({ username: usernameDb, email: emailDb });
+    if (!uniq.ok) {
+      return res.status(409).json({
+        ok: false,
+        code: uniq.code,
+        field: uniq.field,
+        message: uniq.message,
+      });
+    }
 
     const cleanGroups = await normaliseGroups(usergroup);
 
@@ -227,19 +264,18 @@ export async function update(req, res, next) {
     }
 
     // IMPORTANT: scope to the targeted row
-    params.push(targetId);
-    const sql = `UPDATE accounts SET ${fields.join(", ")} WHERE id = ? LIMIT 1`;
+    params.push(targetUsername);
+    const sql = `UPDATE accounts SET ${fields.join(", ")} WHERE username = ? LIMIT 1`;
     await pool.query(sql, params);
 
     // Return the updated row
     const [[row]] = await pool.query(
-      "SELECT id, username, email, active, usergroups FROM accounts WHERE id = ? LIMIT 1",
-      [targetId]
+      "SELECT username, email, active, usergroups FROM accounts WHERE username = ? LIMIT 1",
+      [targetUsername]
     );
     if (!row) return res.status(404).send("User not found after update.");
 
     res.json({
-      id: row.id,
       username: row.username,
       email: row.email ?? "",
       usergroup: toArray(row.usergroups),
@@ -268,28 +304,36 @@ export async function checkGroup(username, groupName) {
 
 
 
-/** PATCH /api/users/:id/active */
+/** PATCH /api/users/:username/active */
 export async function patchActive(req, res, next) {
   try {
-    const targetId = Number(req.params.id);
-    if (!Number.isInteger(targetId) || targetId <= 0) {
-      return res.status(400).send("Invalid id");
+    const targetUsername = req.params.username;
+    const check = enforceHardcodedAdmin({ targetUsername, body: { active: (req.body || {}).active } });
+    
+    if (!check.ok) {
+      return res.status(check.status || 409).json({
+        ok: false,
+        code: check.code || "POLICY_VIOLATION",
+        message: check.message,
+      });
+    }    
+if (!Number.isInteger(targetUsername) || targetUsername <= 0) {
+      return res.status(400).send("Invalid username");
     }
 
     const { active } = req.body ?? {};
-    await pool.query("UPDATE accounts SET active=? WHERE id=? LIMIT 1", [
+    await pool.query("UPDATE accounts SET active=? WHERE username=? LIMIT 1", [
       active ? 1 : 0,
-      targetId,
+      targetUsername,
     ]);
 
     const [[row]] = await pool.query(
-      "SELECT id, username, email, active, usergroups FROM accounts WHERE id=? LIMIT 1",
-      [targetId]
+      "SELECT username, email, active, usergroups FROM accounts WHERE username=? LIMIT 1",
+      [targetUsername]
     );
     if (!row) return res.status(404).send("User not found");
 
     res.json({
-      id: row.id,
       username: row.username,
       email: row.email ?? "",
       usergroup: toArray(row.usergroups),

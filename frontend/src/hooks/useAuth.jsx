@@ -30,8 +30,7 @@ useEffect(() => {
       if (data?.accessToken) setAccessToken(data.accessToken);
     } catch {}
     try {
-      // minimal check (may return {id:1} or null)
-      const me = await check();           // me could be null or {id:1} or full user
+      const me = await check();        
 
       let fullUser = null;
       if (me) {
