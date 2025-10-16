@@ -8,10 +8,7 @@ import { getCurrentUser, updateCurrentUser } from "../controllers/self.controlle
 
 const r = Router();
 
-// GET current user
 r.get("/", ensureAuth, getCurrentUser);      // GET /api/current
-
-// PUT current user (email and/or password)
 r.put("/", ensureAuth, updateCurrentUser);   // PUT /api/current
 
 export default r;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getUsers, createUser, updateUser } from "../api/users";
 import { getUserGroups, createUserGroup } from "../api/groups";
 import { useAuth } from "../hooks/useAuth";
+import UserGroupPicker from "../components/UserGroupPicker";
 
 // ---- helpers ----
 const sortByUsernameAsc = (arr) =>
@@ -17,7 +18,7 @@ const normUserShape = (u) => ({
   usergroup: asArray(u.usergroup).slice().sort(), // compare as sorted list
 });
 
-// shallow compare the normalised shapes
+// shallow compare the normalised shapes (whether user has been edited)
 const isSameUser = (a, b) => {
   if (!a || !b) return false;
   return (
@@ -29,120 +30,7 @@ const isSameUser = (a, b) => {
   );
 };
 
-const pwdValid = (s) => {
-  return (
-    typeof s === "string" &&
-    s.length >= 8 &&
-    s.length <= 10 &&
-    /[A-Za-z]/.test(s) &&
-    /\d/.test(s) &&
-    /[^A-Za-z0-9]/.test(s)
-  );
-};
-
 const asArray = (v) => Array.isArray(v) ? v : (v ? [String(v)] : []);
-
-const emailRe =
-  /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])?@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
-
-const emailValid = (s) => typeof s === "string" && emailRe.test(s);
-
-
-const NAME_MAX = 50;
-const NAME_RE = /^[A-Za-z0-9 !@#$%^&*()_\-+=\[\]{};:'",.<>/?\\|`~]+$/;
-const nameValid = (s) => {
-  return (
-    typeof s === "string" &&
-    s.length > 0 &&
-    s.length <= NAME_MAX &&
-    NAME_RE.test(s)
-  );
-};
-
-/** Dropdown multi-select with checkbox list + removable tags in the control */
-function UserGroupPicker({ value = [], onChange, options }) {
-  const [open, setOpen] = useState(false);
-  const [anchorEl, setAnchorEl] = useState(null);
-
-  // Close when clicking outside
-  useEffect(() => {
-    function onDocClick(e) {
-      if (!anchorEl) return;
-      if (!anchorEl.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [anchorEl]);
-
-  const toggle = (name) => {
-    if (value.includes(name)) {
-      onChange(value.filter((v) => v !== name));
-    } else {
-      onChange([...value, name]);
-    }
-  };
-
-  return (
-    <div className="relative" ref={setAnchorEl}>
-      {/* Control */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="btn-alt w-full min-h-[34px] rounded-md border-gray-300 px-2 py-1 text-left focus:outline-none focus:ring flex items-center gap-2 flex-wrap"
-      >
-        {value.length === 0 ? (
-          <span className="text-gray-400"></span>
-        ) : (
-          <>
-            {value.map((name) => (
-              <span
-                key={name}
-                className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs"
-              >
-                {name}
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onChange(value.filter((v) => v !== name));
-                  }}
-                  className="cursor-pointer rounded-full px-1 hover:bg-blue-200"
-                  title={`Remove ${name}`}
-                >
-                  ×
-                </span>
-              </span>
-            ))}
-          </>
-        )}
-        <span className="ml-auto text-gray-400">▾</span>
-      </button>
-
-      {/* Menu */}
-      {open && (
-        <div className="absolute z-20 mt-1 w-[18rem] max-w-[80vw] rounded-md border bg-white dark:bg-gray-900 shadow-lg">
-          <ul className="max-h-60 overflow-auto py-1">
-            {options.map((name) => {
-              const checked = value.includes(name);
-              return (
-                <li key={name}>
-                  <label className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-blue-600"
-                      checked={checked}
-                      onChange={() => toggle(name)}
-                    />
-                    <span className="text-sm">{name}</span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
 
 export default function AdminHome() {
   const { ready, isAuthenticated } = useAuth();
@@ -220,18 +108,6 @@ export default function AdminHome() {
 
   const saveRow = async (row) => {
     // validate
-    if (!row.username) return setMsg("Username is required.");
-    if (!nameValid(row.username)) {
-      return setMsg(`Username must be 1–${NAME_MAX} chars and contain only letters, numbers, or special characters.`);
-    }
-    if (row.email && !emailValid(row.email)) return setMsg("Email must be valid.");
-    if (row.password && !pwdValid(row.password))
-      return setMsg("Password must be 8–10 chars, include letters, numbers, and a special character.");
-    for (const g of asArray(row.usergroup)) {
-      if (!nameValid(g)) {
-        return setMsg(`Group name “${g}” must be 1–${NAME_MAX} valid characters.`);
-      }
-    }
     const payload = {
       username: row.username,
       email: row.email?.trim().toLowerCase() || undefined,
@@ -272,20 +148,6 @@ export default function AdminHome() {
   // create (first row)
   const changeNew = (k, v) => setNewUser((u) => ({ ...u, [k]: v }));
   const createNew = async () => {
-    if (!newUser.username || !newUser.email || !newUser.password) {
-      return setMsg("Field(s) cannot be empty.");
-    }
-    if (!nameValid(newUser.username)) {
-      return setMsg(`Username must be 1–${NAME_MAX} chars and contain only letters, numbers, or special characters.`);
-    }
-    if (!emailValid(newUser.email)) return setMsg("Email must be valid.");
-    if (!pwdValid(newUser.password))
-      return setMsg("Password must be 8–10 chars, include letters, numbers, and a special character.");
-    for (const g of asArray(newUser.usergroup)) {
-      if (!nameValid(g)) {
-        return setMsg(`Group name “${g}” must be 1–${NAME_MAX} valid characters.`);
-      }
-    }
     try {
       const created = await createUser({
         username: newUser.username,
@@ -348,23 +210,13 @@ export default function AdminHome() {
     const name = (newGroupName || "").trim();
     if (!name) return; // no-op for empty
 
-    if (!nameValid(name)) {
-      setMsg(`Group name must be 1–${NAME_MAX} valid characters.`);
-      return;
-    }
-    const exists = groupOptions.some((g) => g.toLowerCase() === name.toLowerCase());
-    if (exists) {
-      setMsg("That user group already exists.");
-      return;
-    }
-
     try {
       const createdName = await createUserGroup(name);
       setGroupOptions((opts) => [...opts, createdName].sort((a, b) => a.localeCompare(b)));
       setOk(`“${createdName}” added.`);
       setNewGroupName("");
     } catch (e) {
-      setMsg(e.message || "Failed to add user group");
+      setMsg(e?.response?.data?.message || e.message || "Failed to add user group");
     }
   };
 
@@ -483,15 +335,6 @@ export default function AdminHome() {
                   key={row.username}
                   className="bg-white border-b border-gray-200"
                 >
-                  {/* <td className="px-6 py-4">
-                    <input
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                      value={row.username ?? ""}
-                      onChange={(e) => changeRow(row.username, "username", e.target.value)}
-                      autoComplete="off"
-                    />
-                  </td> */}
                   <td className="px-6 py-4">
                     <span className="whitespace-nowrap">{row.username || "—"}</span>
                   </td>

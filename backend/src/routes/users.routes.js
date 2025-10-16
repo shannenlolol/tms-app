@@ -8,8 +8,8 @@ import { ensureAuth } from "../middleware/jwt.js";
 
 const router = Router();
 
-router.get("/", users.list);                    // GET    /api/users
-router.post("/", users.create);                 // POST   /api/users
-router.put("/:username", users.update);               // PUT    /api/users/:username
+router.get("/", ensureAuth, users.list);            // GET    /api/users
+router.post("/", ensureAuth, users.create);         // POST   /api/users
+router.put("/:username", ensureAuth, users.update); // PUT    /api/users/:username
 
 export default router;

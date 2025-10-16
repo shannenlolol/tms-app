@@ -7,9 +7,9 @@ import bcrypt from "bcrypt";
 
 const emailRe =
   /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
-const emailOk = (s) => typeof s === "string" && emailRe.test(s);
+const emailValid = (s) => typeof s === "string" && emailRe.test(s);
 
-const pwdOk = (s) =>
+const pwdValid = (s) =>
   typeof s === "string" &&
   s.length >= 8 &&
   s.length <= 10 &&
@@ -74,15 +74,16 @@ export async function getCurrentUser(req, res) {
   res.json({ username: u.username, email: u.email, usergroup, active: !!u.active });
 }
 
-/** PUT /api/users/current  { email?, currentPassword?, newPassword? } */
+/** PUT /api/users/current  { email?, currentPassword?, newPassword?, confirmPassword } */
 export async function updateCurrentUser(req, res) {
   const username = req.user?.username;
   if (!username) return res.status(401).json({ message: "Unauthenticated" });
 
-  let { email = "", currentPassword = "", newPassword = "" } = req.body ?? {};
+  let { email = "", currentPassword = "", newPassword = "", confirmPassword = "" } = req.body ?? {};
   email = String(email).trim();
   currentPassword = String(currentPassword || "");
   newPassword = String(newPassword || "");
+  confirmPassword = String(confirmPassword || "");
 
   // Load current user (need existing values and hash)
   const [[me]] = await pool.query(
@@ -99,7 +100,7 @@ export async function updateCurrentUser(req, res) {
     !!email && email.toLowerCase() !== String(me.email || "").toLowerCase();
 
   if (emailChanged) {
-    if (!emailOk(email)) {
+    if (!emailValid(email)) {
       return res.status(400).json({ message: "Email must be valid." });
     }
     const uniq = await assertUniqueEmail({ email: email });
@@ -116,20 +117,35 @@ export async function updateCurrentUser(req, res) {
   }
 
   // ---- PASSWORD CHANGE (requires current + new, and strength) ----
-  const passwordChanging = !!currentPassword || !!newPassword;
+    const changingPassword =
+      (currentPassword || "").length > 0 ||
+      (newPassword || "").length > 0 ||
+      (confirmPassword || "").length > 0;
 
-  if (passwordChanging) {
-    if (!currentPassword || !newPassword) {
+  if (changingPassword) {
+    if (!currentPassword) {
       return res
         .status(400)
-        .json({ message: "Please provide current and new password." });
+        .json({ message: "Please enter your current password." });
     }
-    if (!pwdOk(newPassword)) {
+    if (!newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Please enter your new password." });
+    }
+    if (!pwdValid(newPassword)) {
       return res.status(400).json({
         message:
           "New password must be 8–10 chars and include letters, numbers, and a special character.",
       });
     }
+    if (newPassword !== confirmPassword) {
+        return res.status(400).json({
+        message:
+          "New password and confirm password do not match.",
+      });
+    }
+
     const ok = await bcrypt.compare(currentPassword, me.password || "");
     if (!ok) return res.status(401).json({ message: "Current password is incorrect." });
 

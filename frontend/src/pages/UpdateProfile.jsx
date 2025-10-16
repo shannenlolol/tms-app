@@ -3,19 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getCurrentUser, updateCurrentUser } from "../api/users";
 
-/* validators (same as Admin) */
-const pwdValid = (s) =>
-  typeof s === "string" &&
-  s.length >= 8 &&
-  s.length <= 10 &&
-  /[A-Za-z]/.test(s) &&
-  /\d/.test(s) &&
-  /[^A-Za-z0-9]/.test(s);
-
-const re =
-  /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])?@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
-const emailValid = (s) => typeof s === "string" && re.test(s);
-
 function normaliseGroups(arrOrCsv) {
   return Array.isArray(arrOrCsv)
     ? arrOrCsv
@@ -82,47 +69,11 @@ export default function UpdateProfile() {
     setMsg("");
     setOk("");
 
-    const emailChanged = email.trim() !== (profile.email || "");
-    const changingPassword =
-      (currentPassword || "").length > 0 ||
-      (newPassword || "").length > 0 ||
-      (confirmPassword || "").length > 0;
-
     const payload = {};
-
-    if (emailChanged) {
-      if (!emailValid(email.trim())) {
-        setMsg("Email must be valid.");
-        return;
-      }
-      payload.email = email.trim();
-    }
-
-    if (changingPassword) {
-      if (!currentPassword) {
-        setMsg("Please enter your current password.");
-        return;
-      }
-      if (!newPassword) {
-        setMsg("Please enter a new password.");
-        return;
-      }
-      if (!pwdValid(newPassword)) {
-        setMsg("New password must be 8–10 characters and include letters, numbers, and a special character.");
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        setMsg("New password and confirm password do not match.");
-        return;
-      }
-      payload.currentPassword = currentPassword;
-      payload.newPassword = newPassword;
-    }
-
-    if (!emailChanged && !changingPassword) {
-      setMsg("No changes to save.");
-      return;
-    }
+    payload.email = email.trim();
+    payload.currentPassword = currentPassword;
+    payload.newPassword = newPassword;
+    payload.confirmPassword = confirmPassword;
 
     try {
       setSaving(true);

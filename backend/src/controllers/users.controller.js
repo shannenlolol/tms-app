@@ -9,6 +9,18 @@ import { enforceHardcodedAdmin, hardcodedAdmin } from "../policy/hardcodedAdmin.
 
 const ROUNDS = 12; // 10–12 is common
 
+const NAME_MAX = 50;
+const NAME_RE = /^[A-Za-z0-9 !@#$%^&*()_\-+=\[\]{};:'",.<>/?\\|`~]+$/;
+const nameValid = (s) => {
+  return (
+    typeof s === "string" &&
+    s.length > 0 &&
+    s.length <= NAME_MAX &&
+    NAME_RE.test(s)
+  );
+};
+
+
 // Convert DB "usergroups" (CSV/string) <-> UI array
 const toArray = (v) =>
   String(v ?? "")
@@ -137,9 +149,11 @@ export async function create(req, res, next) {
 
     const usernameDb = String(username || "").trim();
     const emailDb = String(email || "").trim();
-
     if (!usernameDb || !emailDb || !password) {
-      return res.status(400).json({ ok: false, message: "username/email/password are required" });
+      return res.status(400).json({ ok: false, message: "Field(s) cannot be empty." });
+    }
+    if (!nameValid(usernameDb)) {
+      return res.status(400).json({ ok: false, message: `Username must be 1–${NAME_MAX} chars and contain only letters, numbers, or special characters.`});
     }
     if (!emailOk(emailDb)) {
       return res.status(400).json({ ok: false, message: "Email must be valid." });
