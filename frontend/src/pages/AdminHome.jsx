@@ -5,10 +5,31 @@ import { useAuth } from "../hooks/useAuth";
 import UserGroupPicker from "../components/UserGroupPicker";
 
 // ---- helpers ----
-const sortByUsernameAsc = (arr) =>
-  [...arr].sort((a, b) =>
-    String(a?.username ?? "").localeCompare(String(b?.username ?? ""), undefined, { sensitivity: "base" })
-  );
+// Put username === "admin" at the very top,
+// then anyone in the "admin" group(s),
+// then everyone else, each bucket A→Z (case-insensitive).
+
+const sortUsers = (arr) => {
+  const normGroups = (raw) => {
+    const list = Array.isArray(raw) ? raw : String(raw ?? "").split(",");
+    return new Set(list.map(s => String(s ?? "").trim().toLowerCase()).filter(Boolean));
+  };
+
+  const rank = (u) => {
+    const uname = String(u?.username ?? "");
+    if (uname.toLowerCase() === "admin") return 0;               // hard-coded admin user
+    const groups = normGroups(u?.groups ?? u?.usergroups ?? u?.usergroup);
+    return groups.has("admin") ? 1 : 2;                          // admin group next, then others
+  };
+
+  return [...arr].sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    const an = String(a?.username ?? "");
+    const bn = String(b?.username ?? "");
+    return an.localeCompare(bn, undefined, { sensitivity: "base" });
+  });
+};
 
 // Normalise for comparison (trim/lower email, sort groups)
 const normUserShape = (u) => ({
@@ -74,7 +95,7 @@ export default function AdminHome() {
         setLoading(true);
         const [users, groups] = await Promise.all([getUsers(), getUserGroups()]);
         // Map backend (array usergroup) -> UI fields; ensure password empty for inline editing
-        const mapped = sortByUsernameAsc(users).map((u) => ({
+        const mapped = sortUsers(users).map((u) => ({
           ...u,
           usergroup: asArray(u.usergroup),
           password: "", // empty -> "(leave blank to keep)"
@@ -106,6 +127,8 @@ export default function AdminHome() {
   const changeRow = (username, key, value) =>
     setRows((rs) => rs.map((r) => (r.username === username ? { ...r, [key]: value } : r)));
 
+  const { user: me, reloadUser } = useAuth();
+
   const saveRow = async (row) => {
     // validate
     const payload = {
@@ -131,8 +154,15 @@ export default function AdminHome() {
         copy.set(row.username, normUserShape(safe));
         return copy;
       });
-      setOk("Update successful.");
-    } catch (e) {
+    // If we edited the *current* user, just re-hydrate from server.
+    const isSelf =
+      String(row.username || "").toLowerCase() === String(me?.username || "").toLowerCase();
+    if (isSelf) {
+      await reloadUser(); // silent by default; NavBar re-renders from updated roles
+    }
+
+    setOk("Update successful.");
+  } catch (e) {
       console.log(e.message, e.response)
       const code = e?.response?.data?.code;
       const m =
@@ -161,7 +191,7 @@ export default function AdminHome() {
         usergroup: asArray(created.usergroup),
         password: "",
       };
-      setRows((rs) => sortByUsernameAsc([...rs, mapped]));
+      setRows((rs) => sortUsers([...rs, mapped]));
       setOrigById((m) => {
         const copy = new Map(m);
         // assumes `created` (and thus `mapped`) includes the DB username
@@ -179,7 +209,7 @@ export default function AdminHome() {
     try {
       setLoading(true);
       const [users, groups] = await Promise.all([getUsers(), getUserGroups()]);
-      const mapped = sortByUsernameAsc(users).map((u) => ({
+      const mapped = sortUsers(users).map((u) => ({
         ...u,
         usergroup: asArray(u.usergroup),
         password: "",
@@ -222,6 +252,7 @@ export default function AdminHome() {
 
   return (
     <div className="p-4">
+      <p className="text-xl px-4 mb-6"><b>User Management</b></p>
       {msg && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">{msg}</div>}
       {ok && <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700">{ok}</div>}
 
