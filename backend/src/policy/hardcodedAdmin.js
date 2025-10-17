@@ -1,5 +1,5 @@
 // policy/adminPolicy.js
-export const ADMIN_GROUP_NAME = "Admin";
+export const ADMIN_GROUP_NAME = "admin";
 
 /** True when this username is the hardcoded admin account. */
 export function hardcodedAdmin(username) {
@@ -8,7 +8,7 @@ export function hardcodedAdmin(username) {
 
 /**
  * Enforce hardcode admin policy for any update that touches its groups/active/username.
- * - The hardcoded admin ("admin") must keep the "Admin" group.
+ * - The hardcoded admin ("admin") must keep the "admin" group.
  * - The hardcoded admin cannot be disabled.
  *
  * Returns { ok: true } if allowed, or { ok: false, status, message } if blocked.
@@ -28,7 +28,7 @@ export function enforceHardcodedAdmin({ targetUsername, body }) {
     };
   }
 
-  // 2) Must keep the Admin group if groups are provided in this request
+  // 2) Must keep the admin group if groups are provided in this request
   if (Object.prototype.hasOwnProperty.call(body, "usergroup")) {
     const groups = Array.isArray(body.usergroup) ? body.usergroup : [];
     const hasAdminGroup = groups
@@ -39,7 +39,7 @@ export function enforceHardcodedAdmin({ targetUsername, body }) {
         ok: false,
         status: 409,
         code: "ADMIN_MUST_KEEP_GROUP",
-        message: 'The "admin" account must keep the Admin group.',
+        message: 'The "admin" account must keep the admin group.',
       };    }
   }
 

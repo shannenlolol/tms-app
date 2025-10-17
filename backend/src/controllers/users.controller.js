@@ -62,7 +62,7 @@ async function normaliseGroups(input) {
   // Deduplicate, trim, keep only allowed, and disallow commas in names (enforced at DB too)
   const out = [];
   for (const raw of Array.isArray(input) ? input : []) {
-    const g = String(raw || "").trim();
+    const g = String(raw || "").trim().toLowerCase();
     if (!g || g.includes(",")) {
       throw new Error("Invalid group name.");
     }
@@ -147,7 +147,7 @@ export async function create(req, res, next) {
       active = true,
     } = req.body ?? {};
 
-    const usernameDb = String(username || "").trim();
+    const usernameDb = String(username || "").trim().toLowerCase();
     const emailDb = String(email || "").trim();
     if (!usernameDb || !emailDb || !password) {
       return res.status(400).json({ ok: false, message: "Field(s) cannot be empty." });
@@ -232,7 +232,7 @@ export async function update(req, res, next) {
       active = true,
     } = req.body ?? {};
 
-    const usernameDb = String(username || "").trim();
+    const usernameDb = String(username || "").trim().toLowerCase();
     const emailDb = String(email || "").trim().toLowerCase(); // normalise email
 
     if (!emailOk(emailDb)) {
@@ -292,7 +292,7 @@ export async function update(req, res, next) {
   }
 }
 export async function checkGroup(username, groupName) {
-  const uname = String(username || "").trim();
+  const uname = String(username || "").trim().toLowerCase();
   const name = String(groupName || "").trim().toLowerCase();
   if (!uname || !name) return false;
 

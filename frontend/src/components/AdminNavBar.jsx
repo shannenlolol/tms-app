@@ -65,16 +65,32 @@ export default function AdminNavBar() {
               className="absolute right-0 w-24 rounded-md border border-gray-200 bg-white shadow-xl z-50"
             >
 
-              <button
-                role="menuitem"
-                onClick={async () => {
-                  setOpen(false);
-                  try { await logout(); } finally { navigate("/login"); }
-                }}
-                className={`btn-alt w-full py-2 text-right hover:bg-gray-50 focus:bg-gray-50 focus:outline-none`}
-              >
-                Logout
-              </button>
+              <ul className="py-1 text-sm text-gray-800">
+                <li>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      setOpen(false);
+                      navigate("/profile");
+                    }}
+                    className={`btn-alt w-full py-2 text-right hover:bg-gray-50 focus:bg-gray-50 focus:outline-none`}
+                  >
+                    Update Profile
+                  </button>
+                </li>
+                <li className="border-t border-gray-100">
+                  <button
+                    role="menuitem"
+                    onClick={async () => {
+                      setOpen(false);
+                      try { await logout(); } finally { navigate("/login"); }
+                    }}
+                    className={`btn-alt w-full py-2 text-right hover:bg-gray-50 focus:bg-gray-50 focus:outline-none`}
+                  >
+                    Logout
+                  </button>
+                </li>
+              </ul>
 
             </div>
           )}

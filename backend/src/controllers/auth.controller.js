@@ -48,15 +48,15 @@ export const login = async (req, res, next) => {
 
     let isAdmin = false;
     try {
-      isAdmin = await checkGroup(user.username, "Admin");
+      isAdmin = await checkGroup(user.username, "admin");
     } catch {
-      isAdmin = groups.includes("Admin");
+      isAdmin = groups.includes("admin");
     }
 
     return res.json({
       ok: true,
       accessToken,
-      user: {username: user.username, groups, isAdmin: groups.includes("Admin") },
+      user: {username: user.username, groups, isAdmin: groups.includes("admin") },
     });
   } catch (err) {
     console.error("Auth login error:", err);
