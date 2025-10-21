@@ -11,5 +11,6 @@ const router = Router();
 router.get("/", ensureAuth, users.list);            // GET    /api/users
 router.post("/", ensureAuth, users.create);         // POST   /api/users
 router.put("/:username", ensureAuth, users.update); // PUT    /api/users/:username
+router.post("/check-group", ensureAuth, users.checkGroup); // POST   /api/users/check-group
 
 export default router;

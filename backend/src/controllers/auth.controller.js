@@ -46,17 +46,10 @@ export const login = async (req, res, next) => {
     setRefreshCookie(res, refreshToken);
     const groups = toArray(user.usergroups);
 
-    let isAdmin = false;
-    try {
-      isAdmin = await checkGroup(user.username, "admin");
-    } catch {
-      isAdmin = groups.includes("admin");
-    }
-
     return res.json({
       ok: true,
       accessToken,
-      user: { username: user.username, groups, isAdmin: groups.includes("admin") },
+      user: { username: user.username, groups },
     });
   } catch (err) {
     console.error("Auth login error:", err);

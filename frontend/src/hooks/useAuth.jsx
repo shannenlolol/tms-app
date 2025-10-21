@@ -16,18 +16,6 @@ import { getCurrentUser } from "../api/users";
 
 const AuthCtx = createContext(null);
 
-// ---- helpers ----
-function toArray(v) {
-  if (Array.isArray(v)) return v;
-  if (typeof v === "string") return v.split(",").map(s => s.trim()).filter(Boolean);
-  return [];
-}
-function normaliseGroupSet(user) {
-  const groupsRaw = user?.groups ?? user?.usergroups ?? user?.usergroup ?? [];
-  const arr = toArray(groupsRaw);
-  return new Set(arr.map(g => String(g ?? "").trim().toLowerCase()).filter(Boolean));
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
@@ -66,13 +54,7 @@ export function AuthProvider({ children }) {
 
   // Derived flags
   const value = useMemo(() => {
-    const groupsSet = normaliseGroupSet(user);
-    // Active unless explicitly 0/false
     const isActive = user?.active !== 0 && user?.active !== false;
-    const isAdmin =
-      user == null
-        ? null // unknown until ready
-        : Boolean(user?.isAdmin ?? groupsSet.has("admin"));
     const isAuthenticated = !!user && isActive;
 
     return {
@@ -82,7 +64,6 @@ export function AuthProvider({ children }) {
       // flags
       isAuthenticated,
       isAuthed: isAuthenticated, // backwards alias
-      isAdmin,
 
       // actions
       async login(username, password) {
@@ -99,7 +80,7 @@ export function AuthProvider({ children }) {
           try {
             const now = new Date();
             console.log(`login refresh token useAuth: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
-            
+
             const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
               withCredentials: true,
             });

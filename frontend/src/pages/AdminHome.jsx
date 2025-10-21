@@ -154,16 +154,15 @@ export default function AdminHome() {
         copy.set(row.username, normUserShape(safe));
         return copy;
       });
-    // If we edited the *current* user, just re-hydrate from server.
-    const isSelf =
-      String(row.username || "").toLowerCase() === String(me?.username || "").toLowerCase();
-    if (isSelf) {
-      await reloadUser(); // silent by default; NavBar re-renders from updated roles
-    }
-
-    setOk("Update successful.");
-  } catch (e) {
-      console.log(e.message, e.response)
+      // If we edited the *current* user, just re-hydrate from server.
+      const isSelf =
+        String(row.username || "").toLowerCase() === String(me?.username || "").toLowerCase();
+      if (isSelf) {
+        await reloadUser({ silent: false }); // pull fresh server state into context
+      }
+      reloadUsers();
+      setOk("Update successful.");
+    } catch (e) {
       const code = e?.response?.data?.code;
       const m =
         (typeof e?.response?.data === "string" ? e.response.data : e?.response?.data?.message) ||
@@ -400,7 +399,7 @@ export default function AdminHome() {
                     <label className="inline-flex items-center cursor-pointer">
                       <input type="checkbox" value="" className="sr-only peer" checked={!!row.active}
                         onChange={(e) => changeRow(row.username, "active", e.target.checked)} />
-                  <div className="relative w-11 h-6 bg-gray-300 rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all  peer-checked:bg-green-700"></div>
+                      <div className="relative w-11 h-6 bg-gray-300 rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all  peer-checked:bg-green-700"></div>
                     </label>
                   </td>
 

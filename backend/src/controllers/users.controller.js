@@ -291,22 +291,26 @@ export async function update(req, res, next) {
     next(e);
   }
 }
-export async function checkGroup(username, groupName) {
-  const uname = String(username || "").trim().toLowerCase();
-  const name = String(groupName || "").trim().toLowerCase();
-  if (!uname || !name) return false;
 
-  // Case-insensitive username match (safer if DB collation differs)
-  const [[row]] = await pool.query(
-    "SELECT usergroups FROM accounts WHERE username = ? LIMIT 1",
-    [uname]
-  );
-  if (!row) return false;
+/* POST /api/users/check-group */
+export async function checkGroup(req, res, next) {
+  try {
+    const username = String(req.body?.username || "").trim().toLowerCase();
+    const group    = String(req.body?.usergroup || "").trim().toLowerCase();
+    if (!username || !group) return res.status(400).json(false);
 
-  const groups = toArray(row.usergroups).map((g) => g.toLowerCase());
-  return groups.includes(name);
+    const [[row]] = await pool.query(
+      "SELECT usergroups FROM accounts WHERE username = ? LIMIT 1",
+      [username]
+    );
+    if (!row) return res.status(404).json(false);
+
+    const member = toArray(row.usergroups).map(g => g.toLowerCase()).includes(group);
+    return res.json(member); // strictly boolean
+  } catch {
+    return res.status(500).json(false);
+  }
 }
-
 
 // ---- Frontend compatibility aliases ----
 export const getUsers = list;

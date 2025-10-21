@@ -19,4 +19,5 @@ export const updateCurrentUser = async (payload) =>
 export const getUsers = async () => (await http.get("/users")).data;
 export const createUser = async (body) => (await http.post("/users", body)).data;
 export const updateUser = async (username, body) => (await http.put(`/users/${username}`, body)).data;
-
+export const checkGroup = async (username, usergroup) =>
+  (await http.post("/users/check-group", { username, usergroup })).data;
