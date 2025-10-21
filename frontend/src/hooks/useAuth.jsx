@@ -36,6 +36,9 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     (async () => {
       try {
+        const now = new Date();
+        console.log(`frontend useAuth refresh access token: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+
         // 1) Refresh access token from HttpOnly refresh cookie (if present)
         const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
           withCredentials: true,
@@ -94,6 +97,9 @@ export function AuthProvider({ children }) {
         setReady(false);
         try {
           try {
+            const now = new Date();
+            console.log(`login refresh token useAuth: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+            
             const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
               withCredentials: true,
             });

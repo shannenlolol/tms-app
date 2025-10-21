@@ -57,6 +57,9 @@ http.interceptors.response.use(
 
     try {
       isRefreshing = true;
+      const now = new Date();
+      console.log(`frontend client refresh token: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+
       const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
         withCredentials: true,
       });

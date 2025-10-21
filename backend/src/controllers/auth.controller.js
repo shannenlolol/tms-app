@@ -6,7 +6,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pool from "../models/db.js";
-import { makeAccessToken, makeRefreshToken, setRefreshCookie, clearRefreshCookie } from "../middleware/jwt.js";
+import { makeAccessToken, makeRefreshToken, setRefreshCookie } from "../middleware/jwt.js";
 import { checkGroup } from "./users.controller.js";
 
 // tiny helper: DB CSV/string -> array
@@ -56,7 +56,7 @@ export const login = async (req, res, next) => {
     return res.json({
       ok: true,
       accessToken,
-      user: {username: user.username, groups, isAdmin: groups.includes("admin") },
+      user: { username: user.username, groups, isAdmin: groups.includes("admin") },
     });
   } catch (err) {
     console.error("Auth login error:", err);
@@ -67,10 +67,14 @@ export const login = async (req, res, next) => {
 /** GET /api/auth/refresh  (uses HttpOnly refresh cookie) */
 export const refresh = (req, res) => {
   const token = req.cookies?.rt;
-  if (!token) return res.status(401).json({ ok: false, message: "Missing refresh token" });
+  if (!token) {
+    return res.status(401).json({ ok: false, message: "Missing refresh token" });
+  }
   try {
+    const now = new Date();
+    console.log(`verify refresh token in cookie to make access token: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
     const payload = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
-    const accessToken = makeAccessToken({username: payload.username });
+    const accessToken = makeAccessToken({ username: payload.username });
     return res.json({ ok: true, accessToken });
   } catch {
     return res.status(401).json({ ok: false, message: "Invalid or expired refresh token" });
@@ -86,6 +90,9 @@ export async function logout(_req, res) {
     sameSite: "none",     // cross-site (5173 <-> 3000)
     path: "/api/auth/refresh", // EXACT same path used when setting the cookie
   });
+  const now = new Date();
+  console.log(`5refresh cookie cleared at authcontroller: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+
   return res.sendStatus(204); // no content
 }
 

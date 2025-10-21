@@ -10,12 +10,18 @@ import jwt from "jsonwebtoken";
 /** Signers */
 export function makeAccessToken(user) {
   // keep payload tiny; put only what you need on every request
+  const now = new Date();
+  console.log(`1access token made: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+
   return jwt.sign({ username: user.username }, process.env.ACCESS_TOKEN_SECRET, {
     expiresIn: process.env.ACCESS_TOKEN_TTL || "15m",
   });
 }
 export function makeRefreshToken(user) {
-  return jwt.sign({ username: user.username  }, process.env.REFRESH_TOKEN_SECRET, {
+  const now = new Date();
+  console.log(`2refresh token made: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+
+  return jwt.sign({ username: user.username }, process.env.REFRESH_TOKEN_SECRET, {
     expiresIn: process.env.REFRESH_TOKEN_TTL || "7d",
   });
 }
@@ -37,6 +43,9 @@ export function ensureAuth(req, res, next) {
 
 /** Helpers for refresh cookie (HttpOnly) */
 export function setRefreshCookie(res, refreshToken) {
+  const now = new Date();
+  console.log(`3refresh cookie made: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+
   res.cookie("rt", refreshToken, {
     httpOnly: true,
     secure: true,        // you’re on HTTPS localhost; keep true in prod
@@ -44,8 +53,4 @@ export function setRefreshCookie(res, refreshToken) {
     path: "/api/auth/refresh",
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days (matches default)
   });
-}
-
-export function clearRefreshCookie(res) {
-  res.clearCookie("rt", { path: "/api/auth/refresh" });
 }
