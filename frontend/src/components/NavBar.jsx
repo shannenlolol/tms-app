@@ -21,7 +21,7 @@ function roleFlags(user) {
 export default function NavBar() {
   const navigate = useNavigate();
   const { user, ready } = useAuth();
-  const { isAdmin, isProjectSide } = roleFlags(user);
+  const { isAdmin, isProjectSide, isOther } = roleFlags(user);
 
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
@@ -57,6 +57,8 @@ export default function NavBar() {
   const items = [
     isAdmin && { key: "admin", label: "User Management", onClick: () => navigate("/admin") },
     isProjectSide && { key: "tasks", label: "Task Management", onClick: () => navigate("/") },
+    isOther && { key: "tasks", label: "Task Management", onClick: () => navigate("/") },
+
     { key: "profile", label: "Update Profile", onClick: () => navigate(isAdmin ? "/admin/profile" : "/profile"), },
     { key: "logout", label: "Logout", divider: true, onClick: async () => { try { await logout(); } finally { navigate("/login"); } },},
   ].filter(Boolean);
@@ -91,7 +93,7 @@ export default function NavBar() {
                     <button
                       role="menuitem"
                       onClick={() => { setOpen(false); onClick(); }}
-                      className="btn-alt w-full text-right px-4 py-2 hover:bg-gray-50 focus:bg-gray-50"
+                      className="btn-white w-full text-right px-4 py-2 hover:bg-gray-50 focus:bg-gray-50"
                     >
                       {label}
                     </button>

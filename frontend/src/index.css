@@ -85,11 +85,11 @@ button:focus-visible {
     color: #747bff;
   }
   button {
-    background-color: #a09ccd;
+    background-color: #3e79ed;
   }
-
-  button.btn-alt { background-color: #ffffff; border-color: #e3e3e3;}
-  button.btn-dark { background-color: #462d6e; }
+  button.btn-gray { background-color: #828385; border-color: #e3e3e3;}
+  button.btn-white { background-color: #ffffff; border-color: #e3e3e3;}
+  button.btn-green { background-color: #4ea863; }
   /* Disabled state */
   button:disabled,
   button[disabled] {

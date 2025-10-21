@@ -6,7 +6,7 @@ export default function UserGroupPicker({
   value = [],
   onChange,
   options = [],
-  placeholder = "Select",
+  placeholder = "",
   className = "",
 }) {
   const [open, setOpen] = useState(false);
@@ -37,9 +37,7 @@ export default function UserGroupPicker({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="btn-alt w-full min-h-[34px] rounded-md border-gray-300 px-2 py-1 text-left focus:outline-none focus:ring flex items-center gap-2 flex-wrap"
-        aria-haspopup="listbox"
-        aria-expanded={open}
+        className="btn-white w-full min-h-[34px] rounded-md border-gray-300 px-2 py-1 text-left focus:outline-none focus:ring flex items-center gap-2 flex-wrap"
       >
         {value.length === 0 ? (
           <span className="text-gray-400">{placeholder}</span>
@@ -48,7 +46,7 @@ export default function UserGroupPicker({
             {value.map((name) => (
               <span
                 key={name}
-                className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs"
+                className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs"
               >
                 {name}
                 <span

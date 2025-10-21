@@ -30,7 +30,7 @@ function SingleGroupSelect({ value, onChange, options, placeholder = "Select" })
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`btn-alt w-56 inline-flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm leading-none shadow-sm focus:outline-none focus:ring`}
+        className={`btn-white w-56 inline-flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm leading-none shadow-sm focus:outline-none focus:ring`}
       >
         {value ? (
           <span className="inline-flex items-center rounded-fullpx-2 py-0.5 text-xs">
@@ -56,7 +56,7 @@ function SingleGroupSelect({ value, onChange, options, placeholder = "Select" })
                     onChange(name);
                     setOpen(false);
                   }}
-                  className={`btn-alt w-full text-left px-3 py-2 hover:bg-gray-50 ${value === name ? "font-medium" : ""
+                  className={`btn-white w-full text-left px-3 py-2 hover:bg-gray-50 ${value === name ? "font-medium" : ""
                     }`}
                 >
                   {name}
@@ -232,156 +232,159 @@ export default function Home() {
   };
 
   return (
-    <div className="p-2">
-      {msg && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">{msg}</div>}
-      {ok && <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700">{ok}</div>}
-
-      <div className="relative shadow-md sm:rounded-lg overflow-visible lg:overflow-visible">
-        <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
-          <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-            <tr>
-              <th className="px-6 py-3">ID</th>
-              <th className="px-6 py-3">Application Acronym</th>
-              <th className="px-6 py-3">Description</th>
-              <th className="px-6 py-3">Start Date</th>
-              <th className="px-6 py-3">End Date</th>
-              <th className="px-6 py-3"></th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {/* Inline "add new" row at the top */}
-            <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
-              <td className="px-6 py-3 text-gray-400"></td>
-              <td className="w-60 px-6 py-3">
-                <input
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                  value={newUser.email}
-                  onChange={(e) => changeNew("email", e.target.value)}
-                  autoComplete="off"
-                />
-              </td>
-              <td className="w-160 px-6 py-3">
-                <textarea
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                  value={newUser.username}
-                  onChange={(e) => changeNew("username", e.target.value)}
-                  autoComplete="off"
-                />
-              </td>
-              <td className="px-6 py-3">
-                <input
-                  type="date"
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
-               focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                  value={fmtLocalDate(newUser.startDate)}
-                  onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
-                  // Optional constraints:
-                  // min={fmtLocalDate(new Date())}
-                  // max="2030-12-31"
-                  autoComplete="off"
-                />
-              </td>
-              <td className="px-6 py-3">
-                <input
-                  type="date"
-                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
-               focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                  value={fmtLocalDate(newUser.startDate)}
-                  onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
-                  // Optional constraints:
-                  // min={fmtLocalDate(new Date())}
-                  // max="2030-12-31"
-                  autoComplete="off"
-                />
-              </td>
-
-              <td className="px-6 py-3">
-                <button
-                  onClick={createNew}
-                  className={`btn-dark w-42 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
-                >
-                  Add Application                </button>
-              </td>
-            </tr>
-
-            {/* Existing users (always editable) */}
-            {loading ? (
-              <tr>
-                <td className="px-6 py-4" colSpan={7}>
-                  Loading…
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr
-                  key={row.username}
-                  className="bg-white border-b border-gray-200"
-                >
-                  <td className="px-6 py-4">{row.username}</td>
-
-                  <td className="px-6 py-4">
-                    <input
-                      disabled
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                      value={row.username ?? ""}
-                      onChange={(e) => changeRow(row.username, "username", e.target.value)}
-                      autoComplete="off"
-                    />
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <textarea
-                      disabled
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                      value={row.username ?? ""}
-                      onChange={(e) => changeRow(row.username, "username", e.target.value)}
-                      autoComplete="off"
-                    />
-                  </td>
-                  <td className="px-6 py-3">
-                    <input
-                      type="date"
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
-               focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                      value={fmtLocalDate(newUser.startDate)}
-                      onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
-                      // Optional constraints:
-                      // min={fmtLocalDate(new Date())}
-                      // max="2030-12-31"
-                      autoComplete="off"
-                    />
-                  </td>
-                  <td className="px-6 py-3">
-                    <input
-                      type="date"
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
-               focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                      value={fmtLocalDate(newUser.startDate)}
-                      onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
-                      // Optional constraints:
-                      // min={fmtLocalDate(new Date())}
-                      // max="2030-12-31"
-                      autoComplete="off"
-                    />
-                  </td>
-                  <td className="px-6 py-3">
-                    <button
-                      onClick={createNew}
-                      className={`btn w-42 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
-                    >
-                      Open                </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="p-4">
+      <p className="text-xl px-4 mb-6"><b>Applications</b></p>
       </div>
-    </div>
+    // <div className="p-2">
+    //   {msg && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">{msg}</div>}
+    //   {ok && <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700">{ok}</div>}
+
+    //   <div className="relative shadow-md sm:rounded-lg overflow-visible lg:overflow-visible">
+    //     <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
+    //       <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+    //         <tr>
+    //           <th className="px-6 py-3">ID</th>
+    //           <th className="px-6 py-3">Application Acronym</th>
+    //           <th className="px-6 py-3">Description</th>
+    //           <th className="px-6 py-3">Start Date</th>
+    //           <th className="px-6 py-3">End Date</th>
+    //           <th className="px-6 py-3"></th>
+    //         </tr>
+    //       </thead>
+
+    //       <tbody>
+    //         {/* Inline "add new" row at the top */}
+    //         <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
+    //           <td className="px-6 py-3 text-gray-400"></td>
+    //           <td className="w-60 px-6 py-3">
+    //             <input
+    //               className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
+    //        focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+    //               value={newUser.email}
+    //               onChange={(e) => changeNew("email", e.target.value)}
+    //               autoComplete="off"
+    //             />
+    //           </td>
+    //           <td className="w-160 px-6 py-3">
+    //             <textarea
+    //               className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
+    //        focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+    //               value={newUser.username}
+    //               onChange={(e) => changeNew("username", e.target.value)}
+    //               autoComplete="off"
+    //             />
+    //           </td>
+    //           <td className="px-6 py-3">
+    //             <input
+    //               type="date"
+    //               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
+    //            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+    //               value={fmtLocalDate(newUser.startDate)}
+    //               onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
+    //               // Optional constraints:
+    //               // min={fmtLocalDate(new Date())}
+    //               // max="2030-12-31"
+    //               autoComplete="off"
+    //             />
+    //           </td>
+    //           <td className="px-6 py-3">
+    //             <input
+    //               type="date"
+    //               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
+    //            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+    //               value={fmtLocalDate(newUser.startDate)}
+    //               onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
+    //               // Optional constraints:
+    //               // min={fmtLocalDate(new Date())}
+    //               // max="2030-12-31"
+    //               autoComplete="off"
+    //             />
+    //           </td>
+
+    //           <td className="px-6 py-3">
+    //             <button
+    //               onClick={createNew}
+    //               className={`btn-green w-42 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
+    //             >
+    //               Add Application                </button>
+    //           </td>
+    //         </tr>
+
+    //         {/* Existing users (always editable) */}
+    //         {loading ? (
+    //           <tr>
+    //             <td className="px-6 py-4" colSpan={7}>
+    //               Loading…
+    //             </td>
+    //           </tr>
+    //         ) : (
+    //           rows.map((row) => (
+    //             <tr
+    //               key={row.username}
+    //               className="bg-white border-b border-gray-200"
+    //             >
+    //               <td className="px-6 py-4">{row.username}</td>
+
+    //               <td className="px-6 py-4">
+    //                 <input
+    //                   disabled
+    //                   className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
+    //        focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+    //                   value={row.username ?? ""}
+    //                   onChange={(e) => changeRow(row.username, "username", e.target.value)}
+    //                   autoComplete="off"
+    //                 />
+    //               </td>
+
+    //               <td className="px-6 py-4">
+    //                 <textarea
+    //                   disabled
+    //                   className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
+    //        focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+    //                   value={row.username ?? ""}
+    //                   onChange={(e) => changeRow(row.username, "username", e.target.value)}
+    //                   autoComplete="off"
+    //                 />
+    //               </td>
+    //               <td className="px-6 py-3">
+    //                 <input
+    //                   type="date"
+    //                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
+    //            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+    //                   value={fmtLocalDate(newUser.startDate)}
+    //                   onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
+    //                   // Optional constraints:
+    //                   // min={fmtLocalDate(new Date())}
+    //                   // max="2030-12-31"
+    //                   autoComplete="off"
+    //                 />
+    //               </td>
+    //               <td className="px-6 py-3">
+    //                 <input
+    //                   type="date"
+    //                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
+    //            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+    //                   value={fmtLocalDate(newUser.startDate)}
+    //                   onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
+    //                   // Optional constraints:
+    //                   // min={fmtLocalDate(new Date())}
+    //                   // max="2030-12-31"
+    //                   autoComplete="off"
+    //                 />
+    //               </td>
+    //               <td className="px-6 py-3">
+    //                 <button
+    //                   onClick={createNew}
+    //                   className={`btn w-42 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
+    //                 >
+    //                   Open                </button>
+    //               </td>
+    //             </tr>
+    //           ))
+    //         )}
+    //       </tbody>
+    //     </table>
+    //   </div>
+    // </div>
   );
 }

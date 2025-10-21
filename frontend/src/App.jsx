@@ -25,7 +25,7 @@ function roleFlags(user) {
 function homeForRoles(flags) {
   if (flags.isProjectSide) return "/";
   if (flags.isAdmin) return "/admin";
-  if (flags.isOther) return "/temp";
+  if (flags.isOther) return "/";
   return "/login";
 }
 function RoleHomeRedirect() {
@@ -58,7 +58,7 @@ export default function App() {
           <Route
             path="/"
             element={
-              <ProtectedRoutes allow={["project"]}>
+              <ProtectedRoutes allow={["project", "other"]}>
                 <>
                   <NavBar />
                   <Home />
@@ -104,18 +104,18 @@ export default function App() {
             }
           />
 
-          {/* Temp area (neither Admin nor Project-side) */}
+          {/* Temp area (neither Admin nor Project-side)
           <Route
-            path="/temp"
+            path="/"
             element={
               <ProtectedRoutes allow={["other"]}>
                 <>
                   <NavBar />
-                  <Temp />
+                  <Home />
                 </>
               </ProtectedRoutes>
             }
-          />
+          /> */}
 
           {/* Fallback: smart redirect based on role */}
           <Route path="*" element={<RoleHomeRedirect />} />

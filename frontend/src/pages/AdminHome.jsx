@@ -340,14 +340,14 @@ export default function AdminHome() {
                 <label className="inline-flex items-center cursor-pointer">
                   <input type="checkbox" value="" className="sr-only peer" checked={!!newUser.active}
                     onChange={(e) => changeNew("active", e.target.checked)} />
-                  <div className="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
+                  <div className="relative w-11 h-6 bg-gray-300 rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all  peer-checked:bg-green-700"></div>
                 </label>
 
               </td>
               <td className="px-6 py-3">
                 <button
                   onClick={createNew}
-                  className={`btn-dark w-32 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
+                  className={`btn-green w-32 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
                 >
                   Add User                </button>
               </td>
@@ -400,7 +400,7 @@ export default function AdminHome() {
                     <label className="inline-flex items-center cursor-pointer">
                       <input type="checkbox" value="" className="sr-only peer" checked={!!row.active}
                         onChange={(e) => changeRow(row.username, "active", e.target.checked)} />
-                      <div className="relative w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-600"></div>
+                  <div className="relative w-11 h-6 bg-gray-300 rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all  peer-checked:bg-green-700"></div>
                     </label>
                   </td>
 

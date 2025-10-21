@@ -78,7 +78,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={busy}
-                className="group relative w-full overflow-hidden bg-dark rounded-xl bg-white/70 text-dark 
+                className="btn-gray group relative w-full overflow-hidden bg-dark rounded-xl text-white 
                            py-2.5 font-medium shadow-lg transition
                            hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-60"
               >
