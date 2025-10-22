@@ -1,46 +1,67 @@
 ```mermaid
 sequenceDiagram
   autonumber
-  participant B as Browser
-  participant A as API Server
-  participant D as DB (refresh_sessions)
+  participant B as Browser (React app)
+  participant A as API Server (Express)
+  participant D as DB (accounts)
+
+  rect rgb(245,245,245)
+  Note over B,A: App start (hydrate)
+  B->>A: GET /api/auth/refresh (with credentials)
+  A->>A: Verify refresh token (signature and expiry)
+  alt refresh valid
+    A-->>B: { accessToken }
+    B->>A: GET /api/current (Bearer access)
+    A->>D: SELECT account
+    A-->>B: { user }
+  else refresh invalid
+    A-->>B: 401
+  end
+  end
 
   rect rgb(245,245,245)
   Note over B,A: Login
-  B->>A: POST /api/auth/login {username,password}
-  A->>A: Verify bcrypt
-  A->>A: Issue Access JWT (15m)
-  A->>A: Issue Refresh JWT (7d, jti=UUID)
-  A->>D: INSERT (user_id, jti, sha256(rt), ua, ip, expires_at)
-  A-->>B: Set-Cookie: rt (HttpOnly, Secure, SameSite=None, Path=/api/auth/refresh)<br/>Set-Cookie: rt_csrf (non-HttpOnly)
-  A-->>B: { accessToken, user }
+  B->>A: POST /api/auth/login { username, password }
+  A->>D: SELECT account by username
+  A->>A: Verify password and active flag
+  alt credentials valid
+    A-->>B: Set-Cookie: rt
+    Note over A,B: Cookie flags:\nHttpOnly\nSecure\nSameSite=None\nPath=/api/auth/refresh
+    A-->>B: { accessToken, user }
+  else invalid
+    A-->>B: 401
   end
-
-  Note over B: Access token kept in memory
-
-  rect rgb(245,245,245)
-  Note over B,A: Access token expires
-  B->>A: GET /api/things (Authorization: Bearer …)
-  A-->>B: 401 (expired)
   end
 
   rect rgb(245,245,245)
-  Note over B,A: Refresh (rotation + reuse detection)
-  B->>A: POST /api/auth/refresh<br/>(withCredentials, X-Refresh-CSRF)
-  A->>A: Verify rt (iss/aud/exp) + CSRF match
-  A->>D: SELECT * FROM refresh_sessions WHERE jti=?
-  alt Session valid & hash matches & not revoked & not expired
-    A->>D: UPDATE ... SET revoked_at=NOW() WHERE jti=old
-    A->>A: Issue new Access JWT
-    A->>A: Issue new Refresh JWT (new jti)
-    A->>D: INSERT new session (sha256(new rt))
-    A-->>B: Set-Cookie: rt (new), rt_csrf (new)
-    A-->>B: { accessToken }
-    B->>A: Retry original request (Bearer new access)
+  Note over B,A: Normal API calls (until access token expires)
+  B->>A: GET /api/things (Bearer access)
+  A-->>B: 200
+  end
+
+  rect rgb(245,245,245)
+  Note over B,A: 401 → refresh → retry (no rotation)
+  B->>A: GET /api/things (Bearer expired)
+  A-->>B: 401
+  Note over B: Axios queues requests and triggers refresh once
+  B->>A: GET /api/auth/refresh (with credentials)
+  A->>A: Verify refresh token (signature and expiry)
+  alt refresh valid
+    A-->>B: { accessToken }  %% refresh token not rotated
+    B->>A: RETRY original request (Bearer new access)
     A-->>B: 200
-  else Reuse/mismatch/expired/missing
-    A->>D: UPDATE all user sessions SET revoked_at=NOW()
-    A-->>B: 401 (force re-login)
+  else refresh invalid or expired
+    A-->>B: 401
+    Note over B: Clear in-memory access and navigate to /login
   end
   end
+
+  rect rgb(245,245,245)
+  Note over B,A: Logout
+  B->>A: POST /api/auth/logout
+  A-->>B: Clear-Cookie: rt
+  A-->>B: 204
+  end
+
+
 ```

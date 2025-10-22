@@ -103,16 +103,12 @@ export default function UpdateProfile() {
       <div className="w-full max-w-md">
         <h1 className="text-l font-semibold text-center mb-6">Update Profile</h1>
 
-        {msg && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800">
-            {msg}
-          </div>
-        )}
-        {ok && (
+
+        {/* {ok && (
           <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-800">
             {ok}
           </div>
-        )}
+        )} */}
 
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           {loading || !profile ? (
@@ -188,7 +184,11 @@ export default function UpdateProfile() {
                   autoComplete="off"
                 />
               </div>
-
+                      {msg && (
+          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800">
+            {msg}
+          </div>
+        )}
               {/* Submit */}
               <button
                 type="submit"
@@ -197,6 +197,8 @@ export default function UpdateProfile() {
               >
                 {saving ? "Saving…" : "Submit"}
               </button>
+
+
             </form>
           )}
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getUsers, createUser, updateUser } from "../api/users";
 import { getUserGroups, createUserGroup } from "../api/groups";
 import { useAuth } from "../hooks/useAuth";
@@ -12,18 +12,21 @@ import UserGroupPicker from "../components/UserGroupPicker";
 const sortUsers = (arr) => {
   const normGroups = (raw) => {
     const list = Array.isArray(raw) ? raw : String(raw ?? "").split(",");
-    return new Set(list.map(s => String(s ?? "").trim().toLowerCase()).filter(Boolean));
+    return new Set(
+      list.map((s) => String(s ?? "").trim().toLowerCase()).filter(Boolean)
+    );
   };
 
   const rank = (u) => {
     const uname = String(u?.username ?? "");
-    if (uname.toLowerCase() === "admin") return 0;               // hard-coded admin user
+    if (uname.toLowerCase() === "admin") return 0; // hard-coded admin user
     const groups = normGroups(u?.groups ?? u?.usergroups ?? u?.usergroup);
-    return groups.has("admin") ? 1 : 2;                          // admin group next, then others
+    return groups.has("admin") ? 1 : 2; // admin group next, then others
   };
 
   return [...arr].sort((a, b) => {
-    const ra = rank(a), rb = rank(b);
+    const ra = rank(a),
+      rb = rank(b);
     if (ra !== rb) return ra - rb;
     const an = String(a?.username ?? "");
     const bn = String(b?.username ?? "");
@@ -51,7 +54,7 @@ const isSameUser = (a, b) => {
   );
 };
 
-const asArray = (v) => Array.isArray(v) ? v : (v ? [String(v)] : []);
+const asArray = (v) => (Array.isArray(v) ? v : v ? [String(v)] : []);
 
 export default function AdminHome() {
   const { ready, isAuthenticated } = useAuth();
@@ -70,12 +73,36 @@ export default function AdminHome() {
   const [rows, setRows] = useState([]);
   const [groupOptions, setGroupOptions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // keep these internally if you still want to log/debug non-row errors
   const [msg, setMsg] = useState("");
   const [ok, setOk] = useState("");
+
   const [newUser, setNewUser] = useState(emptyNew);
   const [newGroupName, setNewGroupName] = useState("");
 
-  // transient banners
+  // Row-scoped errors
+  const [rowErrors, setRowErrors] = useState({}); // { [username]: "message" }
+  const [newError, setNewError] = useState("");
+
+  // helpers to show & auto-clear inline banners (5s)
+  function showRowError(username, message) {
+    setRowErrors((prev) => ({ ...prev, [username]: message }));
+    setTimeout(() => {
+      setRowErrors((prev) => {
+        if (prev[username] !== message) return prev; // do not clear if replaced
+        const copy = { ...prev };
+        delete copy[username];
+        return copy;
+      });
+    }, 5000);
+  }
+  function showNewError(message) {
+    setNewError(message);
+    setTimeout(() => setNewError(""), 5000);
+  }
+
+  // transient banners (not rendered now; safe to remove if unused)
   useEffect(() => {
     if (!msg) return;
     const t = setTimeout(() => setMsg(""), 5000);
@@ -104,7 +131,6 @@ export default function AdminHome() {
         setGroupOptions(groups);
         const nextMap = new Map(mapped.map((u) => [u.username, normUserShape(u)]));
         setOrigById(nextMap);
-
       } catch (e) {
         setMsg(e?.response?.data?.message || e.message || "Failed to load users");
       } finally {
@@ -118,11 +144,12 @@ export default function AdminHome() {
     if ((row.password ?? "").length > 0) return true;
 
     const orig = origById.get(row.username);
-    // If don't have a snapshot yet (e.g., just created), treat as clean
+    // If there is no snapshot yet (e.g., just created), treat as clean
     if (!orig) return false;
 
     return !isSameUser(normUserShape(row), orig);
   };
+
   // inline edits (always-on editing)
   const changeRow = (username, key, value) =>
     setRows((rs) => rs.map((r) => (r.username === username ? { ...r, [key]: value } : r)));
@@ -154,20 +181,31 @@ export default function AdminHome() {
         copy.set(row.username, normUserShape(safe));
         return copy;
       });
-      // If we edited the *current* user, just re-hydrate from server.
+      // Clear any inline error on success
+      setRowErrors((prev) => {
+        if (!prev[row.username]) return prev;
+        const copy = { ...prev };
+        delete copy[row.username];
+        return copy;
+      });
+
+      // If we edited the *current* user, re-hydrate from server.
       const isSelf =
         String(row.username || "").toLowerCase() === String(me?.username || "").toLowerCase();
       if (isSelf) {
         await reloadUser({ silent: false }); // pull fresh server state into context
       }
       reloadUsers();
-      // setOk("Update successful.");
     } catch (e) {
       const code = e?.response?.data?.code;
       const m =
-        (typeof e?.response?.data === "string" ? e.response.data : e?.response?.data?.message) ||
-        e.message || "Update failed";
-      setMsg(m);
+        (typeof e?.response?.data === "string"
+          ? e.response.data
+          : e?.response?.data?.message) ||
+        e.message ||
+        "Update failed";
+      // Row-scoped banner
+      showRowError(row.username, m);
       if (POLICY_REFRESH_CODES.has(code)) {
         reloadUsers();
       }
@@ -198,9 +236,11 @@ export default function AdminHome() {
         return copy;
       });
       setNewUser(emptyNew);
-      // setOk("User created.");
+      setNewError("");
     } catch (e) {
-      setMsg(e?.response?.data?.message || e.message || "Create failed");
+      const m = e?.response?.data?.message || e.message || "Create failed";
+      // Add-user row banner
+      showNewError(m);
     }
   };
 
@@ -217,23 +257,24 @@ export default function AdminHome() {
       setGroupOptions(groups);
       const nextMap = new Map(mapped.map((u) => [u.username, normUserShape(u)]));
       setOrigById(nextMap);
+
+      // Clear inline errors after a full refresh (optional)
+      setRowErrors({});
+      setNewError("");
     } catch (e) {
       setMsg(e?.response?.data?.message || e.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
   };
-  const POLICY_REFRESH_CODES = new Set([
-    "ADMIN_CANNOT_DISABLE",
-    "ADMIN_MUST_KEEP_GROUP",
-  ]);
+
+  const POLICY_REFRESH_CODES = new Set(["ADMIN_CANNOT_DISABLE", "ADMIN_MUST_KEEP_GROUP"]);
 
   // call it in the initial effect
   useEffect(() => {
     if (!ready || !isAuthenticated) return;
     reloadUsers();
   }, [ready, isAuthenticated]);
-
 
   const addUserGroupFromInput = async () => {
     const name = (newGroupName || "").trim();
@@ -242,13 +283,12 @@ export default function AdminHome() {
     try {
       const createdName = await createUserGroup(name);
       setGroupOptions((opts) => [...opts, createdName].sort((a, b) => a.localeCompare(b)));
-      // setOk(`“${createdName}” added.`);
       setNewGroupName("");
     } catch (e) {
       setMsg(e?.response?.data?.message || e.message || "Failed to add user group");
+      // If you want this also inline, add a small state and render under the input.
     }
   };
-
   return (
     <div className="p-4 pb-60">
       <p className="text-xl px-4 mb-6"><b>User Management</b></p>
@@ -298,11 +338,9 @@ export default function AdminHome() {
           <tbody>
             {/* Inline "add new" row at the top */}
             <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
-              {/* <td className="px-6 py-3 text-gray-400">—</td> */}
               <td className="px-6 py-3">
                 <input
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                   value={newUser.username}
                   onChange={(e) => changeNew("username", e.target.value)}
                   autoComplete="off"
@@ -317,8 +355,7 @@ export default function AdminHome() {
               </td>
               <td className="px-6 py-3">
                 <input
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                   value={newUser.email}
                   onChange={(e) => changeNew("email", e.target.value)}
                   autoComplete="off"
@@ -327,30 +364,44 @@ export default function AdminHome() {
               <td className="px-6 py-3">
                 <input
                   type="password"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                   value={newUser.password}
                   onChange={(e) => changeNew("password", e.target.value)}
                   autoComplete="off"
                 />
               </td>
               <td className="px-6 py-3">
-
                 <label className="inline-flex items-center cursor-pointer">
-                  <input type="checkbox" value="" className="sr-only peer" checked={!!newUser.active}
-                    onChange={(e) => changeNew("active", e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    value=""
+                    className="sr-only peer"
+                    checked={!!newUser.active}
+                    onChange={(e) => changeNew("active", e.target.checked)}
+                  />
                   <div className="relative w-11 h-6 bg-gray-300 rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all  peer-checked:bg-green-700"></div>
                 </label>
-
               </td>
               <td className="px-6 py-3">
                 <button
                   onClick={createNew}
-                  className={`btn-green w-32 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
+                  className="btn-green w-32 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center"
                 >
-                  Add User                </button>
+                  Add User
+                </button>
               </td>
             </tr>
+
+            {/* Full-width banner for Add User errors */}
+            {newError && (
+              <tr>
+                <td colSpan={6} className="px-6 pb-4">
+                  <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-rose-800 text-[15px]">
+                    {newError}
+                  </div>
+                </td>
+              </tr>
+            )}
 
             {/* Existing users (always editable) */}
             {loading ? (
@@ -361,58 +412,75 @@ export default function AdminHome() {
               </tr>
             ) : (
               rows.map((row) => (
-                <tr
-                  key={row.username}
-                  className="bg-white border-b border-gray-200"
-                >
-                  <td className="px-6 py-4">
-                    <span className="whitespace-nowrap">{row.username || "—"}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <UserGroupPicker
-                      value={asArray(row.usergroup)}
-                      onChange={(arr) => changeRow(row.username, "usergroup", arr)}
-                      options={groupOptions}
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <input
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                      value={row.email ?? ""}
-                      onChange={(e) => changeRow(row.username, "email", e.target.value)}
-                      autoComplete="off"
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <input
-                      type="password"
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-           focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                      value={row.password || ""}
-                      onChange={(e) => changeRow(row.username, "password", e.target.value)}
-                      placeholder="*********"
-                      autoComplete="off"
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input type="checkbox" value="" className="sr-only peer" checked={!!row.active}
-                        onChange={(e) => changeRow(row.username, "active", e.target.checked)} />
-                      <div className="relative w-11 h-6 bg-gray-300 rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all  peer-checked:bg-green-700"></div>
-                    </label>
-                  </td>
+                <React.Fragment key={row.username}>
+                  <tr className="bg-white border-b border-gray-200">
+                    <td className="px-6 py-4">
+                      <input
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                        value={row.username ?? ""}
+                        disabled autoComplete="off"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <UserGroupPicker
+                        value={asArray(row.usergroup)}
+                        onChange={(arr) => changeRow(row.username, "usergroup", arr)}
+                        options={groupOptions}
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <input
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                        value={row.email ?? ""}
+                        onChange={(e) => changeRow(row.username, "email", e.target.value)}
+                        autoComplete="off"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <input
+                        type="password"
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                        value={row.password || ""}
+                        onChange={(e) => changeRow(row.username, "password", e.target.value)}
+                        placeholder="*********"
+                        autoComplete="off"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <label className="inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          value=""
+                          className="sr-only peer"
+                          checked={!!row.active}
+                          onChange={(e) => changeRow(row.username, "active", e.target.checked)}
+                        />
+                        <div className="relative w-11 h-6 bg-gray-300 rounded-full peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all  peer-checked:bg-green-700"></div>
+                      </label>
+                    </td>
 
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => saveRow(row)}
-                      disabled={!isRowDirty(row)}
-                      className="w-32 h-10 rounded-md text-white hover:bg-blue-700 inline-flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:text-white"
-                    >
-                      Save
-                    </button>
-                  </td>
-                </tr>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => saveRow(row)}
+                        disabled={!isRowDirty(row)}
+                        className="w-32 h-10 rounded-md text-white hover:bg-blue-700 inline-flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:text-white"
+                      >
+                        Save
+                      </button>
+                    </td>
+                  </tr>
+
+                  {/* Row-scoped banner, full width, left-aligned */}
+                  {rowErrors[row.username] && (
+                    <tr>
+                      <td colSpan={6} className="px-6 pb-4">
+                        <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-rose-800 text-[15px]">
+                          {rowErrors[row.username]}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))
             )}
           </tbody>
