@@ -91,14 +91,14 @@ export default function UpdateProfile() {
   }
 
   return (
-    <div className="min-h-[70vh] w-full flex items-start justify-center pt-8">
-      <button
+    <div className="min-h-[70vh] w-full flex items-start justify-center pt-8 pb-20">
+      {/* <button
         type="button"
         onClick={() => navigate(-1)}
         className="absolute left-30 inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 hover:bg-gray-50"
       >
         <span className="text-lg">{'<'}</span>
-      </button>
+      </button> */}
 
       <div className="w-full max-w-md">
         <h1 className="text-l font-semibold text-center mb-6">Update Profile</h1>
@@ -193,7 +193,7 @@ export default function UpdateProfile() {
               <button
                 type="submit"
                 disabled={saving}
-                className="w-full h-10 rounded-md bg-neutral-800 text-white hover:bg-neutral-900 disabled:opacity-60"
+                className="btn-black w-full h-10 rounded-md bg-neutral-800 text-white hover:bg-neutral-900 disabled:opacity-60"
               >
                 {saving ? "Saving…" : "Submit"}
               </button>

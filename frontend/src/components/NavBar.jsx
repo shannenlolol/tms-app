@@ -56,8 +56,8 @@ export default function NavBar() {
 
   const items = [
     isAdmin && { key: "admin", label: "User Management", onClick: () => navigate("/admin") },
-    isProjectSide && { key: "tasks", label: "Task Management", onClick: () => navigate("/") },
-    isOther && { key: "tasks", label: "Task Management", onClick: () => navigate("/") },
+    isProjectSide && { key: "tasks", label: "Applications", onClick: () => navigate("/") },
+    isOther && { key: "tasks", label: "Applications", onClick: () => navigate("/") },
 
     { key: "profile", label: "Update Profile", onClick: () => navigate(isAdmin ? "/admin/profile" : "/profile"), },
     { key: "logout", label: "Logout", divider: true, onClick: async () => { try { await logout(); } finally { navigate("/login"); } },},

@@ -90,18 +90,15 @@ button:focus-visible {
   button.btn-gray { background-color: #828385; border-color: #e3e3e3;}
   button.btn-white { background-color: #ffffff; border-color: #e3e3e3;}
   button.btn-green { background-color: #4ea863; }
+  button.btn-black { background-color: #000000; }
+
   /* Disabled state */
   button:disabled,
   button[disabled] {
-    background-color: #e5e7eb; /* gray-200/300-ish */
-    color: #6b7280;            /* gray-500 */
+    background-color: #2268f4; /* gray-200/300-ish */
+    color: #ffffff;            /* gray-500 */
     cursor: not-allowed;
     box-shadow: none;
   }
 
-  button:disabled:hover,
-  button:disabled:focus {
-    background-color: #e5e7eb;
-    outline: 0;
-  }
 }

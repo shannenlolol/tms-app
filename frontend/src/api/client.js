@@ -3,84 +3,108 @@
 //  * Attaches in-memory access token; on 401, calls /auth/refresh and retries queued requests.
 //  * Central place for baseURL and withCredentials.
 
+// src/api/client.js
 import axios from "axios";
 
-/** In-memory access token */
-let accessToken = null;
-export const setAccessToken = (t) => { accessToken = t || null; };
-export const getAccessToken = () => accessToken;
-
-/** One shared Axios instance */
-const http = axios.create({
+export const http = axios.create({
   baseURL: "https://localhost:3000/api",
-  withCredentials: true, // needed for refresh cookie calls
+  withCredentials: true,
 });
 
-// Attach Authorization
+let ACCESS = null;
+export function setAccessToken(t) { ACCESS = t || null; }
+export function getAccessToken() { return ACCESS; }
+
+// Attach bearer to non-refresh requests if we have one
 http.interceptors.request.use((config) => {
-  config.headers ||= {};
-  const at = getAccessToken();
-  if (at) config.headers.Authorization = `Bearer ${at}`;
+  const url = config.url || "";
+  const isRefresh = url.endsWith("/auth/refresh");
+  if (!isRefresh && ACCESS) {
+    config.headers.Authorization = `Bearer ${ACCESS}`;
+  }
   return config;
 });
 
-// 401 -> try refresh once, then retry original
 let isRefreshing = false;
-let queue = [];
+let waiters = [];
 
-function flushQueue(newToken) {
-  queue.forEach(({ resolve, reject, original }) => {
-    original.headers ||= {};
-    if (newToken) {
-      original.headers.Authorization = `Bearer ${newToken}`;
-      http(original).then(resolve).catch(reject);
-    } else {
-      reject(new Error("Unauthorised"));
-    }
-  });
-  queue = [];
+function onRefreshed(newAccess) {
+  waiters.forEach((resolve) => resolve(newAccess));
+  waiters = [];
 }
+
+function addWaiter(cb) {
+  waiters.push(cb);
+}
+
+const EXCLUDE_401_REFRESH = [
+  "/auth",          // if your login route is POST /api/auth
+  "/auth/login",    // add this if your route is /api/auth/login
+  "/auth/refresh",
+];
 
 http.interceptors.response.use(
   (res) => res,
-  async (error) => {
-    const status = error?.response?.status;
-    const original = error.config || {};
-    if (status !== 401 || original._retry) {
-      return Promise.reject(error);
-    }
-    original._retry = true;
+  async (err) => {
+    const status = err?.response?.status;
+    const url = err?.config?.url || "";
 
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => queue.push({ resolve, reject, original }));
-    }
-
-    try {
-      isRefreshing = true;
-      const now = new Date();
-      console.log(`frontend client refresh token: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
-
-      const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
-        withCredentials: true,
-      });
-      const newToken = data?.accessToken || null;
-      setAccessToken(newToken);
-      flushQueue(newToken);
-
-      original.headers ||= {};
-      if (newToken) {
-        original.headers.Authorization = `Bearer ${newToken}`;
-        return http(original);
+    // 1) Never try to refresh for these endpoints
+    if (EXCLUDE_401_REFRESH.some((p) => url.endsWith(p))) {
+      // mark refresh errors as silent for any global toast layer
+      if (url.endsWith("/auth/refresh") && status === 401) {
+        err._silent = true;
       }
-      return Promise.reject(error);
-    } catch (e) {
-      setAccessToken(null);
-      flushQueue(null);
-      return Promise.reject(e);
-    } finally {
-      isRefreshing = false;
+      return Promise.reject(err);
     }
+
+    // 2) Only attempt refresh if we actually have an access token already
+    //    (i.e., user was logged in). On the login page there won’t be one.
+    if (status === 401 && getAccessToken()) {
+      const original = err.config;
+
+      // If a refresh is in-flight, queue this request until it finishes
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          addWaiter((newAccess) => {
+            if (!newAccess) return reject(err);
+            original.headers = { ...(original.headers || {}), Authorization: `Bearer ${newAccess}` };
+            resolve(http(original));
+          });
+        });
+      }
+
+      // Start a refresh
+      isRefreshing = true;
+      try {
+        const { data, status: s } = await http.get("/auth/refresh", {
+          // Use base client but avoid recursive interceptor issues:
+          // NOTE: because this is the same instance, we exclude via the EXCLUDE list above.
+          withCredentials: true,
+          validateStatus: (st) => (st >= 200 && st < 300) || st === 401,
+        });
+
+        const newAccess = s === 401 ? null : data?.accessToken || null;
+        if (newAccess) {
+          setAccessToken(newAccess);
+          onRefreshed(newAccess);
+          // retry original request with new token
+          original.headers = { ...(original.headers || {}), Authorization: `Bearer ${newAccess}` };
+          return http(original);
+        } else {
+          // refresh failed — propagate 401
+          onRefreshed(null);
+          return Promise.reject(err);
+        }
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    // 3) For any other case, just bubble up
+    return Promise.reject(err);
   }
 );
+
 
 export default http;

@@ -1,14 +1,5 @@
 // src/hooks/useAuth.js
-//  * React auth context/provider: refreshes access token from cookie,
-//    hydrates current user, and exposes flags (isAuthenticated, isAdmin)
-//    plus actions (login, logout, reloadUser).
-//
-//  * On mount: calls /auth/refresh, then check() and GET /users/current;
-//    sets a `ready` gate so routing doesn’t hinge on token presence.
-//
-//  * Exports: <AuthProvider>, useAuth().
-
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { login as apiLogin, logout as apiLogout, check } from "../api/auth";
 import { getAccessToken, setAccessToken } from "../api/client";
@@ -19,40 +10,45 @@ const AuthCtx = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
+  const bootOnce = useRef(false);
 
-  // Initial session hydration on mount
   useEffect(() => {
+    if (bootOnce.current) return;
+    bootOnce.current = true;
+
+    const isLoginRoute =
+      typeof window !== "undefined" &&
+      window.location.pathname.startsWith("/login");
+
+    // On the login page, don’t auto-refresh — avoid the console 401 noise.
+    if (isLoginRoute) {
+      setReady(true);
+      return;
+    }
+
     (async () => {
       try {
-        const now = new Date();
-        console.log(`frontend useAuth refresh access token: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
-
-        // 1) Refresh access token from HttpOnly refresh cookie (if present)
-        const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
-          withCredentials: true,
-        });
-        if (data?.accessToken) setAccessToken(data.accessToken);
-      } catch {
-        // ignore; not signed in or refresh failed
-      }
-
-      try {
-        // 2) Check session (lightweight)
-        const me = await check();
-
-        // 3) Hydrate full profile regardless of shape of `me`
-        let fullUser = null;
-        if (me) {
-          fullUser = await getCurrentUser(); // GET /api/users/current
+        const { data, status } = await axios.get(
+          "https://localhost:3000/api/auth/refresh",
+          {
+            withCredentials: true,
+            validateStatus: (s) => (s >= 200 && s < 300) || s === 401,
+          }
+        );
+        if (status !== 401 && data?.accessToken) {
+          setAccessToken(data.accessToken);
+          const me = await check();
+          if (me) {
+            const fullUser = await getCurrentUser();
+            setUser(fullUser);
+          }
         }
-        setUser(fullUser);
       } finally {
         setReady(true);
       }
     })();
   }, []);
 
-  // Derived flags
   const value = useMemo(() => {
     const isActive = user?.active !== 0 && user?.active !== false;
     const isAuthenticated = !!user && isActive;
@@ -60,32 +56,25 @@ export function AuthProvider({ children }) {
     return {
       user,
       ready,
-
-      // flags
       isAuthenticated,
-      isAuthed: isAuthenticated, // backwards alias
+      isAuthed: isAuthenticated,
 
-      // actions
       async login(username, password) {
-        // Perform login (server sets refresh cookie; may return access token)
         const res = await apiLogin(username, password);
-
-        // If your login API returns an accessToken, store it
         const token = res?.accessToken ?? res?.data?.accessToken;
         if (token) setAccessToken(token);
 
-        // Immediately hydrate full user (with groups) BEFORE returning
         setReady(false);
         try {
-          try {
-            const now = new Date();
-            console.log(`login refresh token useAuth: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
-
-            const { data } = await axios.get("https://localhost:3000/api/auth/refresh", {
+          // Refresh after successful login in case login didn’t return access
+          const { data } = await axios.get(
+            "https://localhost:3000/api/auth/refresh",
+            {
               withCredentials: true,
-            });
-            if (data?.accessToken) setAccessToken(data.accessToken);
-          } catch { }
+              validateStatus: (s) => (s >= 200 && s < 300) || s === 401,
+            }
+          );
+          if (data?.accessToken) setAccessToken(data.accessToken);
 
           const fullUser = await getCurrentUser();
           setUser(fullUser);
@@ -105,14 +94,17 @@ export function AuthProvider({ children }) {
       async reloadUser({ silent = true } = {}) {
         if (!silent) setReady(false);
         try {
+          if (!getAccessToken()) {
+            setUser(null);
+            return null;
+          }
           const fullUser = await getCurrentUser();
           setUser(fullUser);
           return fullUser;
         } finally {
           if (!silent) setReady(true);
         }
-      }
-
+      },
     };
   }, [user, ready]);
 

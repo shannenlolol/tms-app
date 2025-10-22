@@ -161,7 +161,7 @@ export default function AdminHome() {
         await reloadUser({ silent: false }); // pull fresh server state into context
       }
       reloadUsers();
-      setOk("Update successful.");
+      // setOk("Update successful.");
     } catch (e) {
       const code = e?.response?.data?.code;
       const m =
@@ -198,7 +198,7 @@ export default function AdminHome() {
         return copy;
       });
       setNewUser(emptyNew);
-      setOk("User created.");
+      // setOk("User created.");
     } catch (e) {
       setMsg(e?.response?.data?.message || e.message || "Create failed");
     }
@@ -242,7 +242,7 @@ export default function AdminHome() {
     try {
       const createdName = await createUserGroup(name);
       setGroupOptions((opts) => [...opts, createdName].sort((a, b) => a.localeCompare(b)));
-      setOk(`“${createdName}” added.`);
+      // setOk(`“${createdName}” added.`);
       setNewGroupName("");
     } catch (e) {
       setMsg(e?.response?.data?.message || e.message || "Failed to add user group");
@@ -250,7 +250,7 @@ export default function AdminHome() {
   };
 
   return (
-    <div className="p-4">
+    <div className="p-4 pb-60">
       <p className="text-xl px-4 mb-6"><b>User Management</b></p>
       {msg && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">{msg}</div>}
       {ok && <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700">{ok}</div>}
@@ -407,7 +407,7 @@ export default function AdminHome() {
                     <button
                       onClick={() => saveRow(row)}
                       disabled={!isRowDirty(row)}
-                      className="w-32 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+                      className="w-32 h-10 rounded-md text-white hover:bg-blue-700 inline-flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:text-white"
                     >
                       Save
                     </button>

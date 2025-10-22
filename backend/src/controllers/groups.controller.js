@@ -9,11 +9,11 @@ const NAME_RE = /^[A-Za-z0-9 !@#$%^&*()_\-+=\[\]{};:'",.<>/?\\|`~]+$/;
 
 function validateGroupName(name) {
   const s = String(name || "").trim().toLowerCase();
-  if (!s) return { ok: false, code: "GROUP_NAME_REQUIRED", message: "Name is required." };
-  if (s.length > NAME_MAX) return { ok: false, code: "GROUP_NAME_TOO_LONG", message: `Name must be ≤ ${NAME_MAX} characters.` };
-  if (!NAME_RE.test(s)) return { ok: false, code: "GROUP_NAME_INVALID", message: "Name contains invalid characters." };
+  if (!s) return { ok: false, code: "GROUP_NAME_REQUIRED", message: "Field cannot be empty." };
+  if (s.length > NAME_MAX) return { ok: false, code: "GROUP_NAME_TOO_LONG", message: `User group must not be longer than ${NAME_MAX} characters.` };
+  if (!NAME_RE.test(s)) return { ok: false, code: "GROUP_NAME_INVALID", message: "User group is invalid" };
   return { ok: true, value: s };
-}
+} 
 
 export async function listGroups(_req, res, next) {
   try {
@@ -40,7 +40,7 @@ export async function createGroup(req, res, next) {
         return res.status(409).json({
           ok: false,
           code: "GROUP_EXISTS",
-          message: "That user group already exists.",
+          message: "User group already exists.",
         });
       }
       throw e;

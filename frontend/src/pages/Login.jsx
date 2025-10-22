@@ -20,8 +20,7 @@ export default function Login() {
       await login(username.trim(), password);
       nav("/admin", { replace: true });
     } catch (e) {
-      setErr(e?.response?.data?.message || "Login failed");
-      setMsg("Login failed");
+      setMsg(e?.response?.data?.message || "Login failed");
     }finally {
       setBusy(false);
     }

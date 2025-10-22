@@ -98,7 +98,7 @@ async function assertUniqueUsernameEmail({ username, email, excludeUsername = nu
       ok: false,
       field: "username",
       code: "USERNAME_TAKEN",
-      message: `Username '${row.username}' is already in use.`,
+      message: `Username or email is already in use`,
     };
   }
   if (String(row.email || "").toLowerCase() === emailLc) {
@@ -106,7 +106,7 @@ async function assertUniqueUsernameEmail({ username, email, excludeUsername = nu
       ok: false,
       field: "email",
       code: "EMAIL_TAKEN",
-      message: `Email '${row.email}' is already in use.`,
+      message: `Username or email is already in use`,
     };
   }
   return {
@@ -153,7 +153,7 @@ export async function create(req, res, next) {
       return res.status(400).json({ ok: false, message: "Field(s) cannot be empty." });
     }
     if (!nameValid(usernameDb)) {
-      return res.status(400).json({ ok: false, message: `Username must be 1–${NAME_MAX} chars and contain only letters, numbers, or special characters.`});
+      return res.status(400).json({ ok: false, message: `Username must not be longer than –${NAME_MAX} characters.`});
     }
     if (!emailOk(emailDb)) {
       return res.status(400).json({ ok: false, message: "Email must be valid." });
@@ -161,7 +161,7 @@ export async function create(req, res, next) {
     if (!pwdOk(password)) {
       return res.status(400).json({
         ok: false,
-        message: "Password must be 8–10 chars, include letters, numbers, and a special character.",
+        message: "Password must be 8–10 characters long and include at least one letter, one number, and one special character.",
       });
     }
 
@@ -260,7 +260,7 @@ export async function update(req, res, next) {
         return res
           .status(400)
           .send(
-            "Password must be 8–10 chars, include letters, numbers, and a special character."
+            "Password must be 8–10 characters long and include at least one letter, one number, and one special character."
           );
       }
       const password_hash = await bcrypt.hash(password, ROUNDS);

@@ -24,7 +24,7 @@ export function enforceHardcodedAdmin({ targetUsername, body }) {
       ok: false,
       status: 409, 
       code: "ADMIN_CANNOT_DISABLE",
-      message: 'The "admin" account cannot be disabled.',
+      message: 'Cannot deactivate the original admin.',
     };
   }
 
@@ -39,7 +39,7 @@ export function enforceHardcodedAdmin({ targetUsername, body }) {
         ok: false,
         status: 409,
         code: "ADMIN_MUST_KEEP_GROUP",
-        message: 'The "admin" account must keep the admin group.',
+        message: 'Cannot remove admin group from original admin.',
       };    }
   }
 

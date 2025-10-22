@@ -19,27 +19,30 @@ export const login = async (req, res, next) => {
     const password = req.body?.password ?? "";
 
     if (!username || !password) {
-      return res.status(400).json({ ok: false, message: "Please enter Username and Password!" });
+      return res.status(400).json({ ok: false, message: "Invalid Username and/or Password" });
     }
 
     // Accept both schemas: password or password_hash
     const [rows] = await pool.query(
       `SELECT username, password AS password_hash, active, usergroups
          FROM accounts
-        WHERE username = ? AND active = 1
+        WHERE username = ?
         LIMIT 1`,
       [username]
     );
     if (rows.length === 0) {
-      return res.status(401).json({ ok: false, message: "Incorrect Username and/or Password!" });
+      return res.status(401).json({ ok: false, message: "Invalid Username and/or Password" });
     }
+
 
     const user = rows[0];
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
-      return res.status(401).json({ ok: false, message: "Incorrect Username and/or Password!" });
+      return res.status(401).json({ ok: false, message: "Invalid Username and/or Password" });
     }
-
+    if (user.active !== 1){
+      return res.status(401).json({ ok: false, message: "Inactive account" });
+    }
     const accessToken = makeAccessToken({ username: user.username });
     const refreshToken = makeRefreshToken({ username: user.username });
 

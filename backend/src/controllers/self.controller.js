@@ -136,13 +136,13 @@ export async function updateCurrentUser(req, res) {
     if (!pwdValid(newPassword)) {
       return res.status(400).json({
         message:
-          "New password must be 8–10 chars and include letters, numbers, and a special character.",
+          "New Password must be 8–10 characters long and include at least one letter, one number, and one special character.",
       });
     }
     if (newPassword !== confirmPassword) {
         return res.status(400).json({
         message:
-          "New password and confirm password do not match.",
+          "The passwords do not match.",
       });
     }
 
