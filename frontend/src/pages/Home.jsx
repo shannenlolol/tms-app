@@ -1,122 +1,84 @@
-import { useEffect, useMemo, useState } from "react";
-import { getUsers, createUser, updateUser } from "../api/users";
-import { getUserGroups, createUserGroup } from "../api/groups";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
+// API for the `application` table – implement these in ../api/applications
+import { getApplications, createApplication, updateApplication } from "../api/applications";
 
 // ---- helpers ----
-const sortByUsernameAsc = (arr) =>
+const asStr = (v) => (v == null ? "" : String(v));
+const clampInt = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
+};
+const sortByAcronymAsc = (arr) =>
   [...arr].sort((a, b) =>
-  String(a?.username ?? "").localeCompare(String(b?.username ?? ""), undefined, { sensitivity: "base" })
-);
-const pwdValid = (s) =>
-  typeof s === "string" &&
-  s.length >= 8 &&
-  s.length <= 10 &&
-  /[A-Za-z]/.test(s) &&
-  /\d/.test(s) &&
-  /[^A-Za-z0-9]/.test(s);
-
-const emailRe =
-  /^(?!.*\.\.)[A-Za-z0-9_%+-](?:[A-Za-z0-9._%+-]*[A-Za-z0-9_%+-])?@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$/i;
-const emailValid = (s) => typeof s === "string" && emailRe.test(s);
-
-// ---- Single-select, pills-style control (like the left UI) ----
-function SingleGroupSelect({ value, onChange, options, placeholder = "Select" }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="relative inline-block">
-      {/* Control: white, fixed width */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`btn-white w-56 inline-flex items-center justify-between rounded-md border bg-white px-3 py-2 text-sm leading-none shadow-sm focus:outline-none focus:ring`}
-      >
-        {value ? (
-          <span className="inline-flex items-center rounded-fullpx-2 py-0.5 text-xs">
-            {value}
-          </span>
-        ) : (
-          <span className="text-gray-400">{placeholder}</span>
-        )}
-        <span className="ml-2 text-gray-500">▾</span>
-      </button>
-
-      {/* Menu: white, same width */}
-      {open && (
-        <div
-          className="absolute z-20 mt-1 w-56 rounded-md border bg-white shadow-lg"
-          onMouseLeave={() => setOpen(false)}
-        >
-          <ul className="max-h-60 overflow-auto py-1">
-            {options.map((name) => (
-              <li key={name}>
-                <button
-                  onClick={() => {
-                    onChange(name);
-                    setOpen(false);
-                  }}
-                  className={`btn-white w-full text-left px-3 py-2 hover:bg-gray-50 ${value === name ? "font-medium" : ""
-                    }`}
-                >
-                  {name}
-                </button>
-
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+    asStr(a?.App_Acronym).localeCompare(asStr(b?.App_Acronym), undefined, { sensitivity: "base" })
   );
-}
-// helpers: format <-> parse for <input type="date">
+
+// date <-> input[type=date]
 function fmtLocalDate(value) {
   if (!value) return "";
-  // Accept Date or string; always return YYYY-MM-DD
   const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(+d)) return "";
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-
-function parseLocalDate(dateStr) {
-  // dateStr like "2025-10-13" -> store as the same string (recommended)
-  return dateStr || "";
+function parseLocalDate(s) {
+  return s || ""; // keep as yyyy-mm-dd string in state/payload
 }
 
+// normalise shapes for “is dirty?”
+const normAppShape = (a) => ({
+  App_Acronym: asStr(a.App_Acronym).trim(),
+  App_Description: asStr(a.App_Description),
+  App_Rnumber: clampInt(a.App_Rnumber),
+  App_startDate: asStr(a.App_startDate),
+  App_endDate: asStr(a.App_endDate),
+});
+const isSameApp = (a, b) => {
+  if (!a || !b) return false;
+  const A = normAppShape(a), B = normAppShape(b);
+  return JSON.stringify(A) === JSON.stringify(B);
+};
 
 export default function Home() {
   const { ready, isAuthenticated } = useAuth();
 
   const emptyNew = useMemo(
     () => ({
-      username: "",
-      email: "",
-      password: "",
-      usergroupStr: "", // single value in UI; will send [value] to API
-      active: true,
+      App_Acronym: "",
+      App_Description: "",
+      App_Rnumber: 0,
+      App_startDate: "",
+      App_endDate: "",
     }),
     []
   );
 
   const [rows, setRows] = useState([]);
-  const [groupOptions, setGroupOptions] = useState([]);
+  const [origByKey, setOrigByKey] = useState(new Map());
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState("");
-  const [ok, setOk] = useState("");
-  const [newUser, setNewUser] = useState(emptyNew);
 
-  // transient banners
-  useEffect(() => {
-    if (!msg) return;
-    const t = setTimeout(() => setMsg(""), 5000);
-    return () => clearTimeout(t);
-  }, [msg]);
-  useEffect(() => {
-    if (!ok) return;
-    const t = setTimeout(() => setOk(""), 5000);
-    return () => clearTimeout(t);
-  }, [ok]);
+  // Inline row banners
+  const [rowErrors, setRowErrors] = useState({}); // { [App_Acronym]: "message" }
+  const [newError, setNewError] = useState("");
+
+  const [newApp, setNewApp] = useState(emptyNew);
+
+  function showRowError(acr, message) {
+    setRowErrors((prev) => ({ ...prev, [acr]: message }));
+    setTimeout(() => {
+      setRowErrors((prev) => {
+        if (prev[acr] !== message) return prev;
+        const copy = { ...prev };
+        delete copy[acr];
+        return copy;
+      });
+    }, 5000);
+  }
+  function showNewError(message) {
+    setNewError(message);
+    setTimeout(() => setNewError(""), 5000);
+  }
 
   // initial load
   useEffect(() => {
@@ -124,267 +86,317 @@ export default function Home() {
     (async () => {
       try {
         setLoading(true);
-        const [users, groups] = await Promise.all([getUsers(), getUserGroups()]);
-        // Map backend (array usergroup) -> UI fields; ensure password empty for inline editing
-        const mapped = sortByUsernameAsc(users).map((u) => ({
-          ...u,
-          usergroupStr: Array.isArray(u.usergroup) ? (u.usergroup[0] || "") : String(u.usergroup || ""),
-          password: "", // empty -> "(leave blank to keep)"
+        const apps = await getApplications();
+        const mapped = sortByAcronymAsc(apps).map((a) => ({
+          ...a,
+          App_Rnumber: clampInt(a.App_Rnumber),
+          App_startDate: asStr(a.App_startDate),
+          App_endDate: asStr(a.App_endDate),
         }));
         setRows(mapped);
-        setGroupOptions(groups);
-      } catch (e) {
-        setMsg(e?.response?.data?.message || e.message || "Failed to load users");
+        setOrigByKey(new Map(mapped.map((a) => [asStr(a.App_Acronym), normAppShape(a)])));
       } finally {
         setLoading(false);
       }
     })();
   }, [ready, isAuthenticated]);
 
-  // inline edits (always-on editing)
-  const changeRow = (username, key, value) =>
-    setRows((rs) => rs.map((r) => (r.username === username ? { ...r, [key]: value } : r)));
+  const isRowDirty = (row) => {
+    const key = asStr(row.App_Acronym);
+    const orig = origByKey.get(key);
+    if (!orig) return false;
+    return !isSameApp(row, orig);
+  };
+
+  const changeRow = (acr, key, value) =>
+    setRows((rs) => rs.map((r) => (asStr(r.App_Acronym) === acr ? { ...r, [key]: value } : r)));
+
+  const changeNew = (key, value) => setNewApp((prev) => ({ ...prev, [key]: value }));
+
+  const reload = async () => {
+    try {
+      setLoading(true);
+      const apps = await getApplications();
+      const mapped = sortByAcronymAsc(apps).map((a) => ({
+        ...a,
+        App_Rnumber: clampInt(a.App_Rnumber),
+        App_startDate: asStr(a.App_startDate),
+        App_endDate: asStr(a.App_endDate),
+      }));
+      setRows(mapped);
+      setOrigByKey(new Map(mapped.map((a) => [asStr(a.App_Acronym), normAppShape(a)])));
+      setRowErrors({});
+      setNewError("");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // validations
+  function validateAppShape(a) {
+    const acr = asStr(a.App_Acronym).trim();
+    if (!acr) return "App Acronym is required.";
+    const sd = asStr(a.App_startDate);
+    const ed = asStr(a.App_endDate);
+    if (sd && ed && new Date(ed) < new Date(sd)) return "End date cannot be before start date.";
+    if (String(a.App_Rnumber) !== "" && !Number.isFinite(Number(a.App_Rnumber)))
+      return "Rnumber must be a number.";
+    return "";
+  }
 
   const saveRow = async (row) => {
-    // validate
-    if (!row.username) return setMsg("Username is required.");
-    if (row.email && !emailValid(row.email)) return setMsg("Email must be valid.");
-    if (row.password && !pwdValid(row.password))
-      return setMsg("Password must be 8–10 chars, include letters, numbers, and a special character.");
-
-    const payload = {
-      username: row.username,
-      email: row.email?.trim().toLowerCase() || undefined,
-      // send as single-item array to match your existing backend contract
-      usergroup: row.usergroupStr ? [row.usergroupStr] : [],
-      active: !!row.active,
-    };
-    if (row.password) payload.password = row.password;
+    const err = validateAppShape(row);
+    if (err) return showRowError(asStr(row.App_Acronym), err);
 
     try {
-      const updated = await updateUser(row.username, payload);
-      // normalise back into our UI shape
+      const payload = {
+        ...row,
+        App_Rnumber: clampInt(row.App_Rnumber),
+      };
+      const updated = await updateApplication(asStr(row.App_Acronym), payload);
+
       const safe = {
         ...row,
         ...updated,
-        usergroupStr: Array.isArray(updated.usergroup)
-          ? (updated.usergroup[0] || "")
-          : (row.usergroupStr || ""),
-        password: "", // clear after save
+        App_Rnumber: clampInt(updated?.App_Rnumber ?? row.App_Rnumber),
+        App_startDate: asStr(updated?.App_startDate ?? row.App_startDate),
+        App_endDate: asStr(updated?.App_endDate ?? row.App_endDate),
       };
-      setRows((rs) => rs.map((r) => (r.username === row.username ? safe : r)));
-      setOk("Update successful.");
+
+      setRows((rs) =>
+        rs.map((r) => (asStr(r.App_Acronym) === asStr(row.App_Acronym) ? safe : r))
+      );
+      setOrigByKey((m) => {
+        const copy = new Map(m);
+        copy.set(asStr(row.App_Acronym), normAppShape(safe));
+        return copy;
+      });
+
+      // clear row error if any
+      setRowErrors((prev) => {
+        if (!prev[asStr(row.App_Acronym)]) return prev;
+        const c = { ...prev };
+        delete c[asStr(row.App_Acronym)];
+        return c;
+      });
     } catch (e) {
-      console.error("Row update failed:", e?.response?.status, e?.response?.data);
       const m =
-        (typeof e?.response?.data === "string" ? e.response.data : e?.response?.data?.message) ||
-        e.message ||
+        (typeof e?.response?.data === "string"
+          ? e.response.data
+          : e?.response?.data?.message) ||
+        e?.message ||
         "Update failed";
-      setMsg(m);
+      showRowError(asStr(row.App_Acronym), m);
     }
   };
 
-  // create (first row)
-  const changeNew = (k, v) => setNewUser((u) => ({ ...u, [k]: v }));
   const createNew = async () => {
-    if (!newUser.username || !newUser.email || !newUser.password) {
-      return setMsg("Field(s) cannot be empty.");
-    }
-    if (!emailValid(newUser.email)) return setMsg("Email must be valid.");
-    if (!pwdValid(newUser.password))
-      return setMsg("Password must be 8–10 chars, include letters, numbers, and a special character.");
+    const err = validateAppShape(newApp);
+    if (err) return showNewError(err);
 
     try {
-      const created = await createUser({
-        username: newUser.username,
-        email: newUser.email.trim().toLowerCase(),
-        usergroup: newUser.usergroupStr ? [newUser.usergroupStr] : [],
-        password: newUser.password,
-        active: !!newUser.active,
+      const created = await createApplication({
+        ...newApp,
+        App_Rnumber: clampInt(newApp.App_Rnumber),
       });
+
       const mapped = {
         ...created,
-        usergroupStr: Array.isArray(created.usergroup) ? (created.usergroup[0] || "") : "",
-        password: "",
+        App_Rnumber: clampInt(created.App_Rnumber),
+        App_startDate: asStr(created.App_startDate),
+        App_endDate: asStr(created.App_endDate),
       };
-      setRows((rs) => sortByUsernameAsc([...rs, mapped]));
-      setNewUser(emptyNew);
-      setOk("User created.");
+      setRows((rs) => sortByAcronymAsc([...rs, mapped]));
+      setOrigByKey((m) => {
+        const copy = new Map(m);
+        copy.set(asStr(mapped.App_Acronym), normAppShape(mapped));
+        return copy;
+      });
+      setNewApp(emptyNew);
+      setNewError("");
     } catch (e) {
-      setMsg(e.message || "Create failed");
-    }
-  };
-
-  // add user group (+ New)
-  const onAddUserGroup = async () => {
-    const name = (prompt("Enter new user group name:") || "").trim();
-    if (!name) return;
-    const exists = groupOptions.some((g) => g.toLowerCase() === name.toLowerCase());
-    if (exists) return setMsg("That user group already exists.");
-
-    try {
-      const createdName = await createUserGroup(name);
-      setGroupOptions((opts) => [...opts, createdName].sort((a, b) => a.localeCompare(b)));
-      setOk(`“${createdName}” added.`);
-    } catch (e) {
-      setMsg(e.message || "Failed to add user group");
+      const m =
+        (typeof e?.response?.data === "string"
+          ? e.response.data
+          : e?.response?.data?.message) ||
+        e?.message ||
+        "Create failed";
+      showNewError(m);
     }
   };
 
   return (
-        <div className="p-4">
+    <div className="p-4 pb-60">
       <p className="text-xl px-4 mb-6"><b>Applications</b></p>
-      </div>
-    // <div className="p-2">
-    //   {msg && <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">{msg}</div>}
-    //   {ok && <div className="mb-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-green-700">{ok}</div>}
-
-    //   <div className="relative shadow-md sm:rounded-lg overflow-visible lg:overflow-visible">
-    //     <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
-    //       <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-    //         <tr>
-    //           <th className="px-6 py-3">ID</th>
-    //           <th className="px-6 py-3">Application Acronym</th>
-    //           <th className="px-6 py-3">Description</th>
-    //           <th className="px-6 py-3">Start Date</th>
-    //           <th className="px-6 py-3">End Date</th>
-    //           <th className="px-6 py-3"></th>
-    //         </tr>
-    //       </thead>
-
-    //       <tbody>
-    //         {/* Inline "add new" row at the top */}
-    //         <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
-    //           <td className="px-6 py-3 text-gray-400"></td>
-    //           <td className="w-60 px-6 py-3">
-    //             <input
-    //               className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-    //        focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-    //               value={newUser.email}
-    //               onChange={(e) => changeNew("email", e.target.value)}
-    //               autoComplete="off"
-    //             />
-    //           </td>
-    //           <td className="w-160 px-6 py-3">
-    //             <textarea
-    //               className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-    //        focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-    //               value={newUser.username}
-    //               onChange={(e) => changeNew("username", e.target.value)}
-    //               autoComplete="off"
-    //             />
-    //           </td>
-    //           <td className="px-6 py-3">
-    //             <input
-    //               type="date"
-    //               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
-    //            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-    //               value={fmtLocalDate(newUser.startDate)}
-    //               onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
-    //               // Optional constraints:
-    //               // min={fmtLocalDate(new Date())}
-    //               // max="2030-12-31"
-    //               autoComplete="off"
-    //             />
-    //           </td>
-    //           <td className="px-6 py-3">
-    //             <input
-    //               type="date"
-    //               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
-    //            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-    //               value={fmtLocalDate(newUser.startDate)}
-    //               onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
-    //               // Optional constraints:
-    //               // min={fmtLocalDate(new Date())}
-    //               // max="2030-12-31"
-    //               autoComplete="off"
-    //             />
-    //           </td>
-
-    //           <td className="px-6 py-3">
-    //             <button
-    //               onClick={createNew}
-    //               className={`btn-green w-42 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
-    //             >
-    //               Add Application                </button>
-    //           </td>
-    //         </tr>
-
-    //         {/* Existing users (always editable) */}
-    //         {loading ? (
-    //           <tr>
-    //             <td className="px-6 py-4" colSpan={7}>
-    //               Loading…
-    //             </td>
-    //           </tr>
-    //         ) : (
-    //           rows.map((row) => (
-    //             <tr
-    //               key={row.username}
-    //               className="bg-white border-b border-gray-200"
-    //             >
-    //               <td className="px-6 py-4">{row.username}</td>
-
-    //               <td className="px-6 py-4">
-    //                 <input
-    //                   disabled
-    //                   className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-    //        focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-    //                   value={row.username ?? ""}
-    //                   onChange={(e) => changeRow(row.username, "username", e.target.value)}
-    //                   autoComplete="off"
-    //                 />
-    //               </td>
-
-    //               <td className="px-6 py-4">
-    //                 <textarea
-    //                   disabled
-    //                   className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white
-    //        focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-    //                   value={row.username ?? ""}
-    //                   onChange={(e) => changeRow(row.username, "username", e.target.value)}
-    //                   autoComplete="off"
-    //                 />
-    //               </td>
-    //               <td className="px-6 py-3">
-    //                 <input
-    //                   type="date"
-    //                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
-    //            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-    //                   value={fmtLocalDate(newUser.startDate)}
-    //                   onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
-    //                   // Optional constraints:
-    //                   // min={fmtLocalDate(new Date())}
-    //                   // max="2030-12-31"
-    //                   autoComplete="off"
-    //                 />
-    //               </td>
-    //               <td className="px-6 py-3">
-    //                 <input
-    //                   type="date"
-    //                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none
-    //            focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-    //                   value={fmtLocalDate(newUser.startDate)}
-    //                   onChange={(e) => changeNew("startDate", parseLocalDate(e.target.value))}
-    //                   // Optional constraints:
-    //                   // min={fmtLocalDate(new Date())}
-    //                   // max="2030-12-31"
-    //                   autoComplete="off"
-    //                 />
-    //               </td>
-    //               <td className="px-6 py-3">
-    //                 <button
-    //                   onClick={createNew}
-    //                   className={`btn w-42 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center`}
-    //                 >
-    //                   Open                </button>
-    //               </td>
-    //             </tr>
-    //           ))
-    //         )}
-    //       </tbody>
-    //     </table>
-    //   </div>
-    // </div>
+    </div>
   );
 }
+
+
+//   return (
+//     <div className="p-4 pb-60">
+//       <p className="text-xl px-4 mb-6"><b>Applications</b></p>
+
+//       <div className="relative shadow-md sm:rounded-lg overflow-visible lg:overflow-visible">
+//         <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
+//           <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+//             <tr>
+//               <th className="px-6 py-3">Rnumber</th>
+//               <th className="px-6 py-3">Acronym</th>
+//               <th className="px-6 py-3">Description</th>
+//               <th className="px-6 py-3">Start Date</th>
+//               <th className="px-6 py-3">End Date</th>
+//               <th className="px-6 py-3"></th>
+//             </tr>
+//           </thead>
+
+//           <tbody>
+//             {/* Add-new row */}
+//             <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
+//               <td className="px-6 py-3">
+//                 <div className="w-16 text-gray-500 italic select-none">-</div>
+//               </td>
+//               <td className="px-6 py-3">
+//                 <input
+//                   className="w-44 rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+//                   value={newApp.App_Acronym}
+//                   onChange={(e) => changeNew("App_Acronym", e.target.value)}
+//                   placeholder="e.g. TMS"
+//                   autoComplete="off"
+//                 />
+//               </td>
+
+//               <td className="px-6 py-3">
+//                 <textarea
+//                   className="w-72 rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+//                   value={newApp.App_Description}
+//                   onChange={(e) => changeNew("App_Description", e.target.value)}
+//                   rows={2}
+//                 />
+//               </td>
+
+
+//               <td className="px-6 py-3">
+//                 <input
+//                   type="date"
+//                   className="w-40 rounded-md border border-gray-300 bg-white px-3 py-2 outline-none focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+//                   value={fmtLocalDate(newApp.App_startDate)}
+//                   onChange={(e) => changeNew("App_startDate", parseLocalDate(e.target.value))}
+//                   autoComplete="off"
+//                 />
+//               </td>
+
+//               <td className="px-6 py-3">
+//                 <input
+//                   type="date"
+//                   className="w-40 rounded-md border border-gray-300 bg-white px-3 py-2 outline-none focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+//                   value={fmtLocalDate(newApp.App_endDate)}
+//                   onChange={(e) => changeNew("App_endDate", parseLocalDate(e.target.value))}
+//                   autoComplete="off"
+//                 />
+//               </td>
+
+//               <td className="px-6 py-3">
+//                 <button
+//                   onClick={createNew}
+//                   className="w-24 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center"
+//                 >
+//                   Add
+//                 </button>
+//               </td>
+//             </tr>
+
+//             {/* Add-new error banner */}
+//             {newError && (
+//               <tr>
+//                 <td colSpan={6} className="px-6 pb-4">
+//                   <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-rose-800 text-[15px]">
+//                     {newError}
+//                   </div>
+//                 </td>
+//               </tr>
+//             )}
+
+//             {/* Existing rows */}
+//             {loading ? (
+//               <tr>
+//                 <td className="px-6 py-4" colSpan={6}>Loading…</td>
+//               </tr>
+//             ) : (
+//               rows.map((row) => (
+//                 <React.Fragment key={asStr(row.App_Acronym)}>
+//                   <tr className="bg-white border-b border-gray-200">
+//                                   <td className="px-6 py-3">
+//                 <div className="w-16 text-gray-500 italic select-none">{row.App_Rnumber}</div>
+//               </td>
+//                     <td className="px-6 py-3">
+//                       <input
+//                         className="w-44 rounded-md border border-gray-300 px-3 py-2 outline-none bg-white"
+//                         value={row.App_Acronym}
+//                         disabled
+//                       />
+//                     </td>
+
+//                     <td className="px-6 py-3">
+//                       <textarea
+//                         className="w-72 rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+//                         value={row.App_Description}
+//                         onChange={(e) =>
+//                           changeRow(asStr(row.App_Acronym), "App_Description", e.target.value)
+//                         }
+//                         rows={2}
+//                       />
+//                     </td>
+
+//                     <td className="px-6 py-3">
+//                       <input
+//                         type="date"
+//                         className="w-40 rounded-md border border-gray-300 bg-white px-3 py-2 outline-none"
+//                         value={fmtLocalDate(row.App_startDate)}
+//                         onChange={(e) =>
+//                           changeRow(asStr(row.App_Acronym), "App_startDate", parseLocalDate(e.target.value))
+//                         }
+//                       />
+//                     </td>
+
+//                     <td className="px-6 py-3">
+//                       <input
+//                         type="date"
+//                         className="w-40 rounded-md border border-gray-300 bg-white px-3 py-2 outline-none"
+//                         value={fmtLocalDate(row.App_endDate)}
+//                         onChange={(e) =>
+//                           changeRow(asStr(row.App_Acronym), "App_endDate", parseLocalDate(e.target.value))
+//                         }
+//                       />
+//                     </td>
+
+//                     <td className="px-6 py-3">
+//                       <button
+//                         onClick={() => saveRow(row)}
+//                         disabled={!isRowDirty(row)}
+//                         className="w-24 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+//                       >
+//                         Save
+//                       </button>
+//                     </td>
+//                   </tr>
+
+//                   {/* Row error */}
+//                   {rowErrors[asStr(row.App_Acronym)] && (
+//                     <tr>
+//                       <td colSpan={6} className="px-6 pb-4">
+//                         <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-rose-800 text-[15px]">
+//                           {rowErrors[asStr(row.App_Acronym)]}
+//                         </div>
+//                       </td>
+//                     </tr>
+//                   )}
+//                 </React.Fragment>
+//               ))
+//             )}
+//           </tbody>
+//         </table>
+//       </div>
+//     </div>
+//   );
+// }

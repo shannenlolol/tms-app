@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.routes.js";
 import usersRoutes from "./routes/users.routes.js";
 import groupRoutes from "./routes/groups.routes.js";
 import selfRoutes from "./routes/self.routes.js";
+import applicationsRoutes from "./routes/applications.routes.js";
 
 export const app = express();
 
@@ -59,5 +60,6 @@ app.use("/api/users", ensureAuth, usersRoutes);
 //   POST /api/groups          -> create group
 app.use("/api/groups", ensureAuth, groupRoutes);
 
+app.use("/api/applications", applicationsRoutes);
 // 404
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
