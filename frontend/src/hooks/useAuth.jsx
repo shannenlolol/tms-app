@@ -1,4 +1,14 @@
 // src/hooks/useAuth.js
+/**
+ * Auth context/provider.
+ * Keeps session state (`user`, `ready`) and flags (`isAuthenticated`/`isAuthed`).
+ * Boot: skip on /login; otherwise call /auth/refresh (withCredentials), store access token,
+ * then fetch full user; always set `ready=true` at the end.
+ * Tokens: access token kept in memory via setAccessToken; refresh token is HttpOnly cookie.
+ * Actions: login (refresh + load user), logout (clear token/user), reloadUser (re-fetch or clear).
+ * `bootOnce` prevents double boot in Strict Mode/HMR; inactive users (active=0/false) aren’t authed.
+ */
+
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { login as apiLogin, logout as apiLogout, check } from "../api/auth";
@@ -32,9 +42,10 @@ export function AuthProvider({ children }) {
           "https://localhost:3000/api/auth/refresh",
           {
             withCredentials: true,
-            validateStatus: (s) => (s >= 200 && s < 300) || s === 401,
+            validateStatus: (s) => (s >= 200 && s < 300)
           }
         );
+        // if access token is returned sucessfully from backend
         if (status !== 401 && data?.accessToken) {
           setAccessToken(data.accessToken);
           const me = await check();

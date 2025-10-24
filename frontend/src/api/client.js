@@ -38,8 +38,8 @@ function addWaiter(cb) {
 }
 
 const EXCLUDE_401_REFRESH = [
-  "/auth",          // if your login route is POST /api/auth
-  "/auth/login",    // add this if your route is /api/auth/login
+  "/auth",          
+  "/auth/login",    
   "/auth/refresh",
 ];
 

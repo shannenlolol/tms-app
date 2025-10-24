@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-// API for the `application` table – implement these in ../api/applications
-import { getApplications, createApplication, updateApplication } from "../api/applications";
+import { getApplications, createApplication } from "../api/applications";
 
 // ---- helpers ----
 const asStr = (v) => (v == null ? "" : String(v));
@@ -9,10 +9,17 @@ const clampInt = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
 };
-const sortByAcronymAsc = (arr) =>
-  [...arr].sort((a, b) =>
-    asStr(a?.App_Acronym).localeCompare(asStr(b?.App_Acronym), undefined, { sensitivity: "base" })
-  );
+const toNum = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY; // push non-numbers to the end
+};
+export const sortByRNumberAsc = (arr) =>
+  [...arr].sort((a, b) => {
+    const da = toNum(a?.App_Rnumber);
+    const db = toNum(b?.App_Rnumber);
+    if (da !== db) return da - db;
+    return asStr(a?.App_Acronym).localeCompare(asStr(b?.App_Acronym), undefined, { sensitivity: "base" });
+  });
 
 // date <-> input[type=date]
 function fmtLocalDate(value) {
@@ -23,10 +30,10 @@ function fmtLocalDate(value) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 function parseLocalDate(s) {
-  return s || ""; // keep as yyyy-mm-dd string in state/payload
+  return s || "";
 }
 
-// normalise shapes for “is dirty?”
+// normalise shapes for “is dirty?” (kept for add-new comparison and future use)
 const normAppShape = (a) => ({
   App_Acronym: asStr(a.App_Acronym).trim(),
   App_Description: asStr(a.App_Description),
@@ -34,20 +41,16 @@ const normAppShape = (a) => ({
   App_startDate: asStr(a.App_startDate),
   App_endDate: asStr(a.App_endDate),
 });
-const isSameApp = (a, b) => {
-  if (!a || !b) return false;
-  const A = normAppShape(a), B = normAppShape(b);
-  return JSON.stringify(A) === JSON.stringify(B);
-};
 
 export default function Home() {
   const { ready, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   const emptyNew = useMemo(
     () => ({
       App_Acronym: "",
       App_Description: "",
-      App_Rnumber: 0,
+      App_Rnumber: 0, // DB auto (id-like) — shown as "-"
       App_startDate: "",
       App_endDate: "",
     }),
@@ -55,26 +58,12 @@ export default function Home() {
   );
 
   const [rows, setRows] = useState([]);
-  const [origByKey, setOrigByKey] = useState(new Map());
   const [loading, setLoading] = useState(true);
 
-  // Inline row banners
-  const [rowErrors, setRowErrors] = useState({}); // { [App_Acronym]: "message" }
+  // Inline banners for the "add new" row
   const [newError, setNewError] = useState("");
-
   const [newApp, setNewApp] = useState(emptyNew);
 
-  function showRowError(acr, message) {
-    setRowErrors((prev) => ({ ...prev, [acr]: message }));
-    setTimeout(() => {
-      setRowErrors((prev) => {
-        if (prev[acr] !== message) return prev;
-        const copy = { ...prev };
-        delete copy[acr];
-        return copy;
-      });
-    }, 5000);
-  }
   function showNewError(message) {
     setNewError(message);
     setTimeout(() => setNewError(""), 5000);
@@ -87,117 +76,42 @@ export default function Home() {
       try {
         setLoading(true);
         const apps = await getApplications();
-        const mapped = sortByAcronymAsc(apps).map((a) => ({
+        const mapped = sortByRNumberAsc(apps).map((a) => ({
           ...a,
           App_Rnumber: clampInt(a.App_Rnumber),
           App_startDate: asStr(a.App_startDate),
           App_endDate: asStr(a.App_endDate),
         }));
         setRows(mapped);
-        setOrigByKey(new Map(mapped.map((a) => [asStr(a.App_Acronym), normAppShape(a)])));
       } finally {
         setLoading(false);
       }
     })();
   }, [ready, isAuthenticated]);
 
-  const isRowDirty = (row) => {
-    const key = asStr(row.App_Acronym);
-    const orig = origByKey.get(key);
-    if (!orig) return false;
-    return !isSameApp(row, orig);
-  };
-
-  const changeRow = (acr, key, value) =>
-    setRows((rs) => rs.map((r) => (asStr(r.App_Acronym) === acr ? { ...r, [key]: value } : r)));
-
   const changeNew = (key, value) => setNewApp((prev) => ({ ...prev, [key]: value }));
 
-  const reload = async () => {
-    try {
-      setLoading(true);
-      const apps = await getApplications();
-      const mapped = sortByAcronymAsc(apps).map((a) => ({
-        ...a,
-        App_Rnumber: clampInt(a.App_Rnumber),
-        App_startDate: asStr(a.App_startDate),
-        App_endDate: asStr(a.App_endDate),
-      }));
-      setRows(mapped);
-      setOrigByKey(new Map(mapped.map((a) => [asStr(a.App_Acronym), normAppShape(a)])));
-      setRowErrors({});
-      setNewError("");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // validations
+  // validations (for add-new only)
   function validateAppShape(a) {
     const acr = asStr(a.App_Acronym).trim();
     if (!acr) return "App Acronym is required.";
     const sd = asStr(a.App_startDate);
     const ed = asStr(a.App_endDate);
     if (sd && ed && new Date(ed) < new Date(sd)) return "End date cannot be before start date.";
-    if (String(a.App_Rnumber) !== "" && !Number.isFinite(Number(a.App_Rnumber)))
-      return "Rnumber must be a number.";
     return "";
   }
-
-  const saveRow = async (row) => {
-    const err = validateAppShape(row);
-    if (err) return showRowError(asStr(row.App_Acronym), err);
-
-    try {
-      const payload = {
-        ...row,
-        App_Rnumber: clampInt(row.App_Rnumber),
-      };
-      const updated = await updateApplication(asStr(row.App_Acronym), payload);
-
-      const safe = {
-        ...row,
-        ...updated,
-        App_Rnumber: clampInt(updated?.App_Rnumber ?? row.App_Rnumber),
-        App_startDate: asStr(updated?.App_startDate ?? row.App_startDate),
-        App_endDate: asStr(updated?.App_endDate ?? row.App_endDate),
-      };
-
-      setRows((rs) =>
-        rs.map((r) => (asStr(r.App_Acronym) === asStr(row.App_Acronym) ? safe : r))
-      );
-      setOrigByKey((m) => {
-        const copy = new Map(m);
-        copy.set(asStr(row.App_Acronym), normAppShape(safe));
-        return copy;
-      });
-
-      // clear row error if any
-      setRowErrors((prev) => {
-        if (!prev[asStr(row.App_Acronym)]) return prev;
-        const c = { ...prev };
-        delete c[asStr(row.App_Acronym)];
-        return c;
-      });
-    } catch (e) {
-      const m =
-        (typeof e?.response?.data === "string"
-          ? e.response.data
-          : e?.response?.data?.message) ||
-        e?.message ||
-        "Update failed";
-      showRowError(asStr(row.App_Acronym), m);
-    }
-  };
 
   const createNew = async () => {
     const err = validateAppShape(newApp);
     if (err) return showNewError(err);
 
     try {
+      // Do NOT send App_Rnumber; backend/DB assigns it
       const created = await createApplication({
-        ...newApp,
-        App_Rnumber: clampInt(newApp.App_Rnumber),
+        App_Acronym: newApp.App_Acronym,
+        App_Description: newApp.App_Description,
+        App_startDate: newApp.App_startDate,
+        App_endDate: newApp.App_endDate,
       });
 
       const mapped = {
@@ -206,12 +120,7 @@ export default function Home() {
         App_startDate: asStr(created.App_startDate),
         App_endDate: asStr(created.App_endDate),
       };
-      setRows((rs) => sortByAcronymAsc([...rs, mapped]));
-      setOrigByKey((m) => {
-        const copy = new Map(m);
-        copy.set(asStr(mapped.App_Acronym), normAppShape(mapped));
-        return copy;
-      });
+      setRows((rs) => sortByRNumberAsc([...rs, mapped]));
       setNewApp(emptyNew);
       setNewError("");
     } catch (e) {
@@ -225,13 +134,9 @@ export default function Home() {
     }
   };
 
-  return (
-    <div className="p-4 pb-60">
-      <p className="text-xl px-4 mb-6"><b>Applications</b></p>
-    </div>
-  );
-}
-
+  const openKanban = (acronym) => {
+    navigate(`/applications/${encodeURIComponent(acronym)}/kanban`);
+  };
 
 //   return (
 //     <div className="p-4 pb-60">
@@ -251,7 +156,7 @@ export default function Home() {
 //           </thead>
 
 //           <tbody>
-//             {/* Add-new row */}
+//             {/* Add-new row (still allowed) */}
 //             <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
 //               <td className="px-6 py-3">
 //                 <div className="w-16 text-gray-500 italic select-none">-</div>
@@ -261,11 +166,9 @@ export default function Home() {
 //                   className="w-44 rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
 //                   value={newApp.App_Acronym}
 //                   onChange={(e) => changeNew("App_Acronym", e.target.value)}
-//                   placeholder="e.g. TMS"
 //                   autoComplete="off"
 //                 />
 //               </td>
-
 //               <td className="px-6 py-3">
 //                 <textarea
 //                   className="w-72 rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
@@ -274,8 +177,6 @@ export default function Home() {
 //                   rows={2}
 //                 />
 //               </td>
-
-
 //               <td className="px-6 py-3">
 //                 <input
 //                   type="date"
@@ -285,7 +186,6 @@ export default function Home() {
 //                   autoComplete="off"
 //                 />
 //               </td>
-
 //               <td className="px-6 py-3">
 //                 <input
 //                   type="date"
@@ -295,7 +195,6 @@ export default function Home() {
 //                   autoComplete="off"
 //                 />
 //               </td>
-
 //               <td className="px-6 py-3">
 //                 <button
 //                   onClick={createNew}
@@ -317,81 +216,38 @@ export default function Home() {
 //               </tr>
 //             )}
 
-//             {/* Existing rows */}
+//             {/* Existing rows (READ-ONLY) */}
 //             {loading ? (
 //               <tr>
 //                 <td className="px-6 py-4" colSpan={6}>Loading…</td>
 //               </tr>
 //             ) : (
 //               rows.map((row) => (
-//                 <React.Fragment key={asStr(row.App_Acronym)}>
-//                   <tr className="bg-white border-b border-gray-200">
-//                                   <td className="px-6 py-3">
-//                 <div className="w-16 text-gray-500 italic select-none">{row.App_Rnumber}</div>
-//               </td>
-//                     <td className="px-6 py-3">
-//                       <input
-//                         className="w-44 rounded-md border border-gray-300 px-3 py-2 outline-none bg-white"
-//                         value={row.App_Acronym}
-//                         disabled
-//                       />
-//                     </td>
-
-//                     <td className="px-6 py-3">
-//                       <textarea
-//                         className="w-72 rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-//                         value={row.App_Description}
-//                         onChange={(e) =>
-//                           changeRow(asStr(row.App_Acronym), "App_Description", e.target.value)
-//                         }
-//                         rows={2}
-//                       />
-//                     </td>
-
-//                     <td className="px-6 py-3">
-//                       <input
-//                         type="date"
-//                         className="w-40 rounded-md border border-gray-300 bg-white px-3 py-2 outline-none"
-//                         value={fmtLocalDate(row.App_startDate)}
-//                         onChange={(e) =>
-//                           changeRow(asStr(row.App_Acronym), "App_startDate", parseLocalDate(e.target.value))
-//                         }
-//                       />
-//                     </td>
-
-//                     <td className="px-6 py-3">
-//                       <input
-//                         type="date"
-//                         className="w-40 rounded-md border border-gray-300 bg-white px-3 py-2 outline-none"
-//                         value={fmtLocalDate(row.App_endDate)}
-//                         onChange={(e) =>
-//                           changeRow(asStr(row.App_Acronym), "App_endDate", parseLocalDate(e.target.value))
-//                         }
-//                       />
-//                     </td>
-
-//                     <td className="px-6 py-3">
-//                       <button
-//                         onClick={() => saveRow(row)}
-//                         disabled={!isRowDirty(row)}
-//                         className="w-24 h-10 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
-//                       >
-//                         Save
-//                       </button>
-//                     </td>
-//                   </tr>
-
-//                   {/* Row error */}
-//                   {rowErrors[asStr(row.App_Acronym)] && (
-//                     <tr>
-//                       <td colSpan={6} className="px-6 pb-4">
-//                         <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-rose-800 text-[15px]">
-//                           {rowErrors[asStr(row.App_Acronym)]}
-//                         </div>
-//                       </td>
-//                     </tr>
-//                   )}
-//                 </React.Fragment>
+//                 <tr key={asStr(row.App_Acronym)} className="bg-white border-b border-gray-200">
+//                   <td className="px-6 py-3">
+//                     <div className="w-16">{row.App_Rnumber ?? 0}</div>
+//                   </td>
+//                   <td className="px-6 py-3">
+//                     <div className="px-2 py-1">{row.App_Acronym}</div>
+//                   </td>
+//                   <td className="px-6 py-3">
+//                     <div className="max-w-prose">{row.App_Description || <span className="text-gray-400">—</span>}</div>
+//                   </td>
+//                   <td className="px-6 py-3">
+//                     {fmtLocalDate(row.App_startDate) || <span className="text-gray-400">—</span>}
+//                   </td>
+//                   <td className="px-6 py-3">
+//                     {fmtLocalDate(row.App_endDate) || <span className="text-gray-400">—</span>}
+//                   </td>
+//                   <td className="px-6 py-3">
+//                     <button
+//                       onClick={() => openKanban(row.App_Acronym)}
+//                       className="w-24 h-10 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 inline-flex items-center justify-center"
+//                     >
+//                       Open
+//                     </button>
+//                   </td>
+//                 </tr>
 //               ))
 //             )}
 //           </tbody>
@@ -400,3 +256,12 @@ export default function Home() {
 //     </div>
 //   );
 // }
+
+
+  return (
+    <div className="p-4 pb-60">
+      <p className="text-xl px-4 mb-6"><b>Applications</b></p>
+    </div>
+  );
+}
+

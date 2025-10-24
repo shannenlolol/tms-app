@@ -1,6 +1,6 @@
 // src/api/auth.js
 //  * Authentication helpers: login, session check, logout; refresh via HttpOnly cookie.
-//  * Endpoints: POST /auth/login, GET /auth/session, POST /auth/logout, POST /auth/refresh.
+//  * Endpoints: POST /auth/login, GET /auth/session, POST /auth/logout.
 //  * Stores access token in memory (not localStorage).
 
 import http, { setAccessToken } from "./client";

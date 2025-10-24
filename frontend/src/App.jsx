@@ -9,19 +9,12 @@ import AdminHome from "./pages/AdminHome.jsx";
 import UpdateProfile from "./pages/UpdateProfile.jsx";
 import NavBar from "./components/NavBar.jsx";
 import { useLocation, useNavigate } from "react-router-dom";
+import Kanban from "./pages/Kanban.jsx";
 
 
 function useRoleFlags(user) {
   const [flags, setFlags] = useState({ isAdmin: false, isProjectSide: false, isOther: true });
   const [loading, setLoading] = useState(true);
-
-  // Build a stable key from whatever field your user uses for groups
-  const groupsRaw = user?.groups ?? user?.usergroups ?? user?.usergroup ?? [];
-  const groupsArr = Array.isArray(groupsRaw)
-    ? groupsRaw
-    : String(groupsRaw).split(",").map(s => s.trim()).filter(Boolean);
-  // normalise to lowercase + sorted so order doesn’t prevent re-runs
-  const groupsKey = groupsArr.map(g => g.toLowerCase()).sort().join(",");
 
   useEffect(() => {
     let cancelled = false;
@@ -49,8 +42,8 @@ function useRoleFlags(user) {
       }
     })();
     return () => { cancelled = true; };
-    // 🔑 Re-run when username OR normalised groups change
-  }, [user?.username, groupsKey]);
+    // Re-run when username change
+  }, [user?.username]);
 
   return { ...flags, loading };
 }
@@ -158,7 +151,17 @@ export default function App() {
             }
           />
 
-
+          <Route
+            path="/applications/:acronym/kanban"
+            element={
+              <ProtectedRoutes allow={["project", "other"]}>
+                <>
+                  <NavBar />
+                  <Kanban />
+                </>
+              </ProtectedRoutes>
+            }
+          />
 
           <Route path="*" element={<RoleHomeRedirect />} />
         </Routes>

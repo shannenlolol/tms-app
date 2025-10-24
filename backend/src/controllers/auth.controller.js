@@ -47,12 +47,11 @@ export const login = async (req, res, next) => {
     const refreshToken = makeRefreshToken({ username: user.username });
 
     setRefreshCookie(res, refreshToken);
-    const groups = toArray(user.usergroups);
 
     return res.json({
       ok: true,
       accessToken,
-      user: { username: user.username, groups },
+      user: { username: user.username  },
     });
   } catch (err) {
     console.error("Auth login error:", err);

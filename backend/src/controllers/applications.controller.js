@@ -8,14 +8,9 @@
  */
 import pool from "../models/db.js";
 
-// Normalise helper
 const asStr = (v) => (v == null ? "" : String(v));
-const clampInt = (v) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
-};
 function isValidDateStr(s) {
-  if (!s) return true; // allow empty
+  if (!s) return true;
   const d = new Date(s);
   return !Number.isNaN(+d);
 }
@@ -26,7 +21,7 @@ export async function listApplications(req, res, next) {
       `SELECT App_Acronym, App_Description, App_Rnumber, App_startDate, App_endDate,
               App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
          FROM application
-        ORDER BY App_Acronym ASC`
+        ORDER BY App_Rnumber ASC`
     );
     res.json(rows);
   } catch (e) {
@@ -39,7 +34,6 @@ export async function createApplication(req, res, next) {
     const body = req.body || {};
     const App_Acronym = asStr(body.App_Acronym).trim();
     const App_Description = asStr(body.App_Description);
-    const App_Rnumber = clampInt(body.App_Rnumber);
     const App_startDate = asStr(body.App_startDate);
     const App_endDate = asStr(body.App_endDate);
 
@@ -53,13 +47,7 @@ export async function createApplication(req, res, next) {
       return res.status(400).json({ ok: false, message: "End date cannot be before start date" });
     }
 
-    // Optional: accept permits if provided; otherwise keep NULL/default
-    const App_permit_Open = body.App_permit_Open ?? null;
-    const App_permit_toDoList = body.App_permit_toDoList ?? null;
-    const App_permit_Doing = body.App_permit_Doing ?? null;
-    const App_permit_Done = body.App_permit_Done ?? null;
-
-    // Enforce uniqueness
+    // Uniqueness on acronym
     const [exist] = await pool.query(
       `SELECT 1 FROM application WHERE App_Acronym = ? LIMIT 1`,
       [App_Acronym]
@@ -68,36 +56,30 @@ export async function createApplication(req, res, next) {
       return res.status(409).json({ ok: false, message: "App_Acronym already exists" });
     }
 
+    // INSERT without App_Rnumber — DB assigns AUTO_INCREMENT
     await pool.query(
       `INSERT INTO application
-        (App_Acronym, App_Description, App_Rnumber, App_startDate, App_endDate,
+        (App_Acronym, App_Description, App_startDate, App_endDate,
          App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
       [
         App_Acronym,
         App_Description,
-        App_Rnumber,
         App_startDate || null,
         App_endDate || null,
-        App_permit_Open,
-        App_permit_toDoList,
-        App_permit_Doing,
-        App_permit_Done,
       ]
     );
 
-    const created = {
-      App_Acronym,
-      App_Description,
-      App_Rnumber,
-      App_startDate: App_startDate || null,
-      App_endDate: App_endDate || null,
-      App_permit_Open,
-      App_permit_toDoList,
-      App_permit_Doing,
-      App_permit_Done,
-    };
-    res.status(201).json(created);
+    // Fetch the created row to return generated App_Rnumber
+    const [rows] = await pool.query(
+      `SELECT App_Acronym, App_Description, App_Rnumber, App_startDate, App_endDate,
+              App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
+         FROM application
+        WHERE App_Acronym = ?
+        LIMIT 1`,
+      [App_Acronym]
+    );
+    res.status(201).json(rows[0]);
   } catch (e) {
     next(e);
   }
@@ -111,9 +93,8 @@ export async function updateApplication(req, res, next) {
     }
 
     const body = req.body || {};
-    // Only allow updates to non-PK fields
+    // Only update mutable fields; Rnumber stays immutable (DB id-like)
     const App_Description = asStr(body.App_Description);
-    const App_Rnumber = clampInt(body.App_Rnumber);
     const App_startDate = asStr(body.App_startDate);
     const App_endDate = asStr(body.App_endDate);
 
@@ -124,52 +105,29 @@ export async function updateApplication(req, res, next) {
       return res.status(400).json({ ok: false, message: "End date cannot be before start date" });
     }
 
-    // Optional: pass-through permits if backend stores them (UI not using them)
-    const App_permit_Open = body.App_permit_Open ?? null;
-    const App_permit_toDoList = body.App_permit_toDoList ?? null;
-    const App_permit_Doing = body.App_permit_Doing ?? null;
-    const App_permit_Done = body.App_permit_Done ?? null;
-
     const [result] = await pool.query(
       `UPDATE application
           SET App_Description = ?,
-              App_Rnumber = ?,
               App_startDate = ?,
-              App_endDate = ?,
-              App_permit_Open = ?,
-              App_permit_toDoList = ?,
-              App_permit_Doing = ?,
-              App_permit_Done = ?
+              App_endDate = ?
         WHERE App_Acronym = ?`,
-      [
-        App_Description,
-        App_Rnumber,
-        App_startDate || null,
-        App_endDate || null,
-        App_permit_Open,
-        App_permit_toDoList,
-        App_permit_Doing,
-        App_permit_Done,
-        paramAcr,
-      ]
+      [App_Description, App_startDate || null, App_endDate || null, paramAcr]
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ ok: false, message: "Application not found" });
     }
 
-    const updated = {
-      App_Acronym: paramAcr,
-      App_Description,
-      App_Rnumber,
-      App_startDate: App_startDate || null,
-      App_endDate: App_endDate || null,
-      App_permit_Open,
-      App_permit_toDoList,
-      App_permit_Doing,
-      App_permit_Done,
-    };
-    res.json(updated);
+    // Return fresh row (Rnumber unchanged)
+    const [rows] = await pool.query(
+      `SELECT App_Acronym, App_Description, App_Rnumber, App_startDate, App_endDate,
+              App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
+         FROM application
+        WHERE App_Acronym = ?
+        LIMIT 1`,
+      [paramAcr]
+    );
+    res.json(rows[0]);
   } catch (e) {
     next(e);
   }

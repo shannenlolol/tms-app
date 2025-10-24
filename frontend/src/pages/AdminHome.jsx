@@ -74,7 +74,6 @@ export default function AdminHome() {
   const [groupOptions, setGroupOptions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // keep these internally if you still want to log/debug non-row errors
   const [msg, setMsg] = useState("");
   const [ok, setOk] = useState("");
 
@@ -258,9 +257,6 @@ export default function AdminHome() {
       const nextMap = new Map(mapped.map((u) => [u.username, normUserShape(u)]));
       setOrigById(nextMap);
 
-      // Clear inline errors after a full refresh (optional)
-      setRowErrors({});
-      setNewError("");
     } catch (e) {
       setMsg(e?.response?.data?.message || e.message || "Failed to load users");
     } finally {
