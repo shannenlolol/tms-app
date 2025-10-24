@@ -14,5 +14,4 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 
-export default pool;            // <— default export
-export { pool };                // optional named export
+export default pool;

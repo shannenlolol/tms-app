@@ -2,28 +2,77 @@
  * CRUD for `application` table.
  * Table columns:
  *  App_Acronym (PK), App_Description, App_Rnumber, App_startDate, App_endDate,
- *  App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
+ *  App_permit_Create, App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
  *
- * Your UI currently uses only: Acronym, Description, Rnumber, Start/End dates.
+ * Frontend expects: Permit_Create, Permit_Open, Permit_ToDo, Permit_Doing, Permit_Done
+ * and App_taskCount (computed), plus start/end dates as ISO strings.
  */
 import pool from "../models/db.js";
 
 const asStr = (v) => (v == null ? "" : String(v));
+
+const normCSV = (v) => {
+  if (Array.isArray(v)) {
+    return v.map((s) => asStr(s).trim()).filter(Boolean).join(",");
+  }
+  return asStr(v)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(","); // store as comma-separated in DB
+};
+
 function isValidDateStr(s) {
   if (!s) return true;
   const d = new Date(s);
   return !Number.isNaN(+d);
 }
 
+// Adjust this if your task table/column names differ
+const TASK_COUNT_SQL = `
+  (SELECT COUNT(*) FROM task t WHERE t.Task_app_Acronym = a.App_Acronym)
+`;
+
+/** Map DB row -> API shape expected by the frontend */
+function mapRow(r) {
+  return {
+    App_Acronym: r.App_Acronym,
+    App_Description: r.App_Description,
+    App_Rnumber: r.App_Rnumber,                 // still available (unused in UI)
+    App_startDate: r.App_startDate,             // keep as raw date/ISO; UI formats
+    App_endDate: r.App_endDate,
+    // Permits (strings in DB → arrays handled by frontend normalizer; returning strings is OK)
+    Permit_Create: asStr(r.App_permit_Create),
+    Permit_Open:   asStr(r.App_permit_Open),
+    Permit_ToDo:   asStr(r.App_permit_toDoList),
+    Permit_Doing:  asStr(r.App_permit_Doing),
+    Permit_Done:   asStr(r.App_permit_Done),
+    // Computed count
+    App_taskCount: Number(r.App_taskCount ?? 0),
+  };
+}
+
 export async function listApplications(req, res, next) {
   try {
     const [rows] = await pool.query(
-      `SELECT App_Acronym, App_Description, App_Rnumber, App_startDate, App_endDate,
-              App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
-         FROM application
-        ORDER BY App_Rnumber ASC`
+      `
+      SELECT
+        a.App_Acronym,
+        a.App_Description,
+        a.App_Rnumber,
+        a.App_startDate,
+        a.App_endDate,
+        a.App_permit_Create,
+        a.App_permit_Open,
+        a.App_permit_toDoList,
+        a.App_permit_Doing,
+        a.App_permit_Done,
+        ${TASK_COUNT_SQL} AS App_taskCount
+      FROM application a
+      ORDER BY a.App_Rnumber ASC, a.App_Acronym ASC
+      `
     );
-    res.json(rows);
+    res.json(rows.map(mapRow));
   } catch (e) {
     next(e);
   }
@@ -32,10 +81,17 @@ export async function listApplications(req, res, next) {
 export async function createApplication(req, res, next) {
   try {
     const body = req.body || {};
-    const App_Acronym = asStr(body.App_Acronym).trim();
+    const App_Acronym     = asStr(body.App_Acronym).trim();
     const App_Description = asStr(body.App_Description);
-    const App_startDate = asStr(body.App_startDate);
-    const App_endDate = asStr(body.App_endDate);
+    const App_startDate   = asStr(body.App_startDate);
+    const App_endDate     = asStr(body.App_endDate);
+
+    // NEW permits
+    const App_permit_Create   = normCSV(body.Permit_Create);
+    const App_permit_Open     = normCSV(body.Permit_Open);
+    const App_permit_toDoList = normCSV(body.Permit_ToDo);
+    const App_permit_Doing    = normCSV(body.Permit_Doing);
+    const App_permit_Done     = normCSV(body.Permit_Done);
 
     if (!App_Acronym) {
       return res.status(400).json({ ok: false, message: "App_Acronym is required" });
@@ -56,30 +112,47 @@ export async function createApplication(req, res, next) {
       return res.status(409).json({ ok: false, message: "App_Acronym already exists" });
     }
 
-    // INSERT without App_Rnumber — DB assigns AUTO_INCREMENT
+    // INSERT; App_Rnumber is AUTO_INCREMENT
     await pool.query(
       `INSERT INTO application
         (App_Acronym, App_Description, App_startDate, App_endDate,
-         App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done)
-       VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
+         App_permit_Create, App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         App_Acronym,
-        App_Description,
+        App_Description || null,
         App_startDate || null,
         App_endDate || null,
+        App_permit_Create || null,
+        App_permit_Open || null,
+        App_permit_toDoList || null,
+        App_permit_Doing || null,
+        App_permit_Done || null,
       ]
     );
 
-    // Fetch the created row to return generated App_Rnumber
+    // Return created row + task count
     const [rows] = await pool.query(
-      `SELECT App_Acronym, App_Description, App_Rnumber, App_startDate, App_endDate,
-              App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
-         FROM application
-        WHERE App_Acronym = ?
-        LIMIT 1`,
+      `
+      SELECT
+        a.App_Acronym,
+        a.App_Description,
+        a.App_Rnumber,
+        a.App_startDate,
+        a.App_endDate,
+        a.App_permit_Create,
+        a.App_permit_Open,
+        a.App_permit_toDoList,
+        a.App_permit_Doing,
+        a.App_permit_Done,
+        ${TASK_COUNT_SQL} AS App_taskCount
+      FROM application a
+      WHERE a.App_Acronym = ?
+      LIMIT 1
+      `,
       [App_Acronym]
     );
-    res.status(201).json(rows[0]);
+    res.status(201).json(mapRow(rows[0]));
   } catch (e) {
     next(e);
   }
@@ -93,10 +166,24 @@ export async function updateApplication(req, res, next) {
     }
 
     const body = req.body || {};
-    // Only update mutable fields; Rnumber stays immutable (DB id-like)
     const App_Description = asStr(body.App_Description);
-    const App_startDate = asStr(body.App_startDate);
-    const App_endDate = asStr(body.App_endDate);
+    const App_startDate   = asStr(body.App_startDate);
+    const App_endDate     = asStr(body.App_endDate);
+
+    // Allow updating permits as well (optional for current UI, but future-proof)
+    const wantPermits = [
+      "Permit_Create",
+      "Permit_Open",
+      "Permit_ToDo",
+      "Permit_Doing",
+      "Permit_Done",
+    ].some((k) => Object.prototype.hasOwnProperty.call(body, k));
+
+    const App_permit_Create   = normCSV(body.Permit_Create);
+    const App_permit_Open     = normCSV(body.Permit_Open);
+    const App_permit_toDoList = normCSV(body.Permit_ToDo);
+    const App_permit_Doing    = normCSV(body.Permit_Doing);
+    const App_permit_Done     = normCSV(body.Permit_Done);
 
     if (!isValidDateStr(App_startDate) || !isValidDateStr(App_endDate)) {
       return res.status(400).json({ ok: false, message: "Invalid date format" });
@@ -105,29 +192,64 @@ export async function updateApplication(req, res, next) {
       return res.status(400).json({ ok: false, message: "End date cannot be before start date" });
     }
 
+    // Build dynamic UPDATE to avoid clobbering NULLs unless sent
+    const sets = [
+      "App_Description = ?",
+      "App_startDate = ?",
+      "App_endDate = ?",
+    ];
+    const params = [App_Description || null, App_startDate || null, App_endDate || null];
+
+    if (wantPermits) {
+      sets.push(
+        "App_permit_Create = ?",
+        "App_permit_Open = ?",
+        "App_permit_toDoList = ?",
+        "App_permit_Doing = ?",
+        "App_permit_Done = ?"
+      );
+      params.push(
+        App_permit_Create || null,
+        App_permit_Open || null,
+        App_permit_toDoList || null,
+        App_permit_Doing || null,
+        App_permit_Done || null
+      );
+    }
+
+    params.push(paramAcr);
+
     const [result] = await pool.query(
-      `UPDATE application
-          SET App_Description = ?,
-              App_startDate = ?,
-              App_endDate = ?
-        WHERE App_Acronym = ?`,
-      [App_Description, App_startDate || null, App_endDate || null, paramAcr]
+      `UPDATE application SET ${sets.join(", ")} WHERE App_Acronym = ?`,
+      params
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ ok: false, message: "Application not found" });
     }
 
-    // Return fresh row (Rnumber unchanged)
+    // Return fresh row
     const [rows] = await pool.query(
-      `SELECT App_Acronym, App_Description, App_Rnumber, App_startDate, App_endDate,
-              App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
-         FROM application
-        WHERE App_Acronym = ?
-        LIMIT 1`,
+      `
+      SELECT
+        a.App_Acronym,
+        a.App_Description,
+        a.App_Rnumber,
+        a.App_startDate,
+        a.App_endDate,
+        a.App_permit_Create,
+        a.App_permit_Open,
+        a.App_permit_toDoList,
+        a.App_permit_Doing,
+        a.App_permit_Done,
+        ${TASK_COUNT_SQL} AS App_taskCount
+      FROM application a
+      WHERE a.App_Acronym = ?
+      LIMIT 1
+      `,
       [paramAcr]
     );
-    res.json(rows[0]);
+    res.json(mapRow(rows[0]));
   } catch (e) {
     next(e);
   }

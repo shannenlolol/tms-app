@@ -61,7 +61,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(() => {
-    const isActive = user?.active !== 0 && user?.active !== false;
+    const isActive = user?.active !== 0;
     const isAuthenticated = !!user && isActive;
 
     return {

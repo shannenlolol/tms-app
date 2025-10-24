@@ -15,16 +15,16 @@ export default function Kanban() {
       <div className="mb-4 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
-          className="px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 border border-gray-300"
+          className="btn-white px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 border border-gray-300"
         >
-          ← Back
+          ← 
         </button>
-        <h1 className="text-2xl font-semibold">Kanban — {acronym}</h1>
+        <h1 className="text-2xl font-semibold">{acronym}</h1>
       </div>
 
       {/* Columns scaffold */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {["Open", "To-Do", "Doing", "Done"].map((col) => (
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {["Open", "To-Do", "Doing", "Done", "Close"].map((col) => (
           <div key={col} className="rounded-xl border border-gray-200 bg-white">
             <div className="px-4 py-3 border-b bg-gray-50 font-medium">{col}</div>
             <div className="p-3 space-y-3">
