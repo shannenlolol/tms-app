@@ -99,8 +99,13 @@ export default function NavBar() {
     (isProjectSide || isOther) && {
       key: "tasks",
       label: "Applications",
-      onClick: () => navigate("/"),
+      onClick: () => navigate("/applications"),
     },
+    (isProjectSide || isOther) && {
+      key: "kanban",
+      label: "Kanban",
+      onClick: () => navigate("/kanban"),
+    },    
     {
       key: "profile",
       label: "Update Profile",

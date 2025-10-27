@@ -95,8 +95,8 @@ button:focus-visible {
   /* Disabled state */
   button:disabled,
   button[disabled] {
-    background-color: #2268f4; /* gray-200/300-ish */
-    color: #ffffff;            /* gray-500 */
+    background-color: #6a6b6c4d; 
+    color: #ffffff;            
     cursor: not-allowed;
     box-shadow: none;
   }

@@ -1,12 +1,12 @@
-// src/pages/Home.jsx
+// src/pages/Applications.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getApplications, createApplication } from "../api/applications";
 import { getUserGroups } from "../api/groups";
 import UserGroupPicker from "../components/UserGroupPicker";
-// at the top
 import TinyDatePicker from "../components/TinyDatePicker";
+import { checkGroup } from "../api/users";
 
 // ---- helpers ----
 const asStr = (v) => (v == null ? "" : String(v));
@@ -18,6 +18,31 @@ const sortByAcronymAsc = (arr) =>
   [...arr].sort((a, b) =>
     asStr(a?.App_Acronym).localeCompare(asStr(b?.App_Acronym), undefined, { sensitivity: "base" })
   );
+
+function useIsProjectLead(user) {
+  const [state, setState] = useState({ loading: true, isProjectLead: false });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setState((s) => ({ ...s, loading: true }));
+      try {
+        const username = String(user?.username || "").trim();
+        if (!username) {
+          if (!cancelled) setState({ loading: false, isProjectLead: false });
+          return;
+        }
+        const isPL = await checkGroup(username, "project lead");
+        if (!cancelled) setState({ loading: false, isProjectLead: !!isPL });
+      } finally {
+        if (!cancelled) setState((s) => ({ ...s, loading: false }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.username]);
+
+  return state; // { loading, isProjectLead }
+}
 
 // date <-> input[type=date]
 function fmtLocalDate(value) {
@@ -92,8 +117,11 @@ function DateInput({ value, onChange, className = "", ...props }) {
 }
 
 
-export default function Home() {
-  const { ready, isAuthenticated } = useAuth();
+export default function Applications() {
+  const { ready, isAuthenticated, user } = useAuth();     // ← include user
+
+  const { loading: roleLoading, isProjectLead } = useIsProjectLead(user);
+
   const navigate = useNavigate();
 
   const emptyNew = useMemo(
@@ -159,6 +187,9 @@ export default function Home() {
   }
 
   const createNew = async () => {
+    if (!isProjectLead) {
+      return showNewError("Only Project Lead can create applications.");
+    }
     const err = validateAppShape(newApp);
     if (err) return showNewError(err);
     try {
@@ -190,9 +221,9 @@ export default function Home() {
     }
   };
 
-  const openKanban = (acronym) => {
-    navigate(`/applications/${encodeURIComponent(acronym)}/kanban`);
-  };
+  // const openKanban = (acronym) => {
+  //   navigate(`/applications/${encodeURIComponent(acronym)}/kanban`);
+  // };
 
   return (
     <div className="p-4">
@@ -231,105 +262,107 @@ export default function Home() {
 
           <tbody>
             {/* Add-new row */}
-            <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
-              <td className="px-1 py-3">
-                <input
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                  value={newApp.App_Acronym}
-                  onChange={(e) => changeNew("App_Acronym", e.target.value)}
-                  autoComplete="off"
-                />
-              </td>
-              <td className="px-1 py-3">
-                <textarea
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                  value={newApp.App_Description}
-                  onChange={(e) => changeNew("App_Description", e.target.value)}
-                  rows={1}
-                />
-              </td>
-              <td className="px-1 py-3">
-                <TinyDatePicker
-                  value={newApp.App_startDate}
-                  onChange={(iso) => changeNew("App_startDate", iso)}
-                // placeholder="Start"
-                />
-              </td>
-              <td className="px-1 py-3">
-                <TinyDatePicker
-                  value={newApp.App_endDate}
-                  onChange={(iso) => changeNew("App_endDate", iso)}
-                // placeholder="End"
-                />
-              </td>
+            {isProjectLead && (
+              <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
+                <td className="px-1 py-3">
+                  <input
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                    value={newApp.App_Acronym}
+                    onChange={(e) => changeNew("App_Acronym", e.target.value)}
+                    autoComplete="off"
+                  />
+                </td>
+                <td className="px-1 py-3">
+                  <textarea
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
+                    value={newApp.App_Description}
+                    onChange={(e) => changeNew("App_Description", e.target.value)}
+                    rows={1}
+                  />
+                </td>
+                <td className="px-1 py-3">
+                  <TinyDatePicker
+                    value={newApp.App_startDate}
+                    onChange={(iso) => changeNew("App_startDate", iso)}
+                  // placeholder="Start"
+                  />
+                </td>
+                <td className="px-1 py-3">
+                  <TinyDatePicker
+                    value={newApp.App_endDate}
+                    onChange={(iso) => changeNew("App_endDate", iso)}
+                  // placeholder="End"
+                  />
+                </td>
 
 
-              <td className="px-1 py-3">
-                <UserGroupPicker
-                  value={newApp.Permit_Create}
-                  onChange={(vals) => changeNew("Permit_Create", vals)}
-                  options={groupOptions}
-                />
-              </td>
-              <td className="px-1 py-3">
-                <UserGroupPicker
-                  value={newApp.Permit_Open}
-                  onChange={(vals) => changeNew("Permit_Open", vals)}
-                  options={groupOptions}
-                />
-              </td>
-              <td className="px-1 py-3">
-                <UserGroupPicker
-                  value={newApp.Permit_ToDo}
-                  onChange={(vals) => changeNew("Permit_ToDo", vals)}
-                  options={groupOptions}
-                />
-              </td>
-              <td className="px-1 py-3">
-                <UserGroupPicker
-                  value={newApp.Permit_Doing}
-                  onChange={(vals) => changeNew("Permit_Doing", vals)}
-                  options={groupOptions}
-                />
-              </td>
-              <td className="px-1 py-3">
-                <UserGroupPicker
-                  value={newApp.Permit_Done}
-                  onChange={(vals) => changeNew("Permit_Done", vals)}
-                  options={groupOptions}
-                />
-              </td>
+                <td className="px-1 py-3">
+                  <UserGroupPicker
+                    value={newApp.Permit_Create}
+                    onChange={(vals) => changeNew("Permit_Create", vals)}
+                    options={groupOptions}
+                  />
+                </td>
+                <td className="px-1 py-3">
+                  <UserGroupPicker
+                    value={newApp.Permit_Open}
+                    onChange={(vals) => changeNew("Permit_Open", vals)}
+                    options={groupOptions}
+                  />
+                </td>
+                <td className="px-1 py-3">
+                  <UserGroupPicker
+                    value={newApp.Permit_ToDo}
+                    onChange={(vals) => changeNew("Permit_ToDo", vals)}
+                    options={groupOptions}
+                  />
+                </td>
+                <td className="px-1 py-3">
+                  <UserGroupPicker
+                    value={newApp.Permit_Doing}
+                    onChange={(vals) => changeNew("Permit_Doing", vals)}
+                    options={groupOptions}
+                  />
+                </td>
+                <td className="px-1 py-3">
+                  <UserGroupPicker
+                    value={newApp.Permit_Done}
+                    onChange={(vals) => changeNew("Permit_Done", vals)}
+                    options={groupOptions}
+                  />
+                </td>
 
-              <td className="px-1 py-3">
-                <div className="w-full text-gray-500 italic select-none">0</div>
-              </td>
+                <td className="px-1 py-3">
+                  <div className="w-full text-gray-500 italic select-none">0</div>
+                </td>
 
-              <td className="px-1 py-3">
-                <button
-                  onClick={createNew}
-                  className="w-8 h-8  !p-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center"
-                  aria-label="Add application"
-                  title="Add"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-6 h-6"             // 24px icon
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.25"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
+                <td className="px-1 py-3">
+                  <button
+                    onClick={createNew}
+                    className="w-8 h-8  !p-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center justify-center"
+                    aria-label="Add application"
+                    title="Add"
                   >
-                    <path d="M12 5v14" />
-                    <path d="M5 12h14" />
-                  </svg>
-                </button>
-              </td>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-6 h-6"             // 24px icon
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </svg>
+                  </button>
+                </td>
 
 
-            </tr>
+              </tr>
+            )}
 
             {/* Add-new error banner */}
             {newError && (
@@ -392,14 +425,13 @@ export default function Home() {
                     <div className="w-full">{row.App_taskCount ?? 0}</div>
                   </td>
 
-                  <td className="px-1 py-3">
+                  {/* <td className="px-1 py-3">
                     <button
                       onClick={() => openKanban(row.App_Acronym)}
                       className="w-8 h-8  !p-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 inline-flex items-center justify-center"
                       aria-label="Open Kanban"
                       title="Open Kanban"
                     >
-                      {/* arrow-square-out icon (inline SVG, no deps) */}
                       <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M14 3h7v7"></path>
                         <path d="M10 14L21 3"></path>
@@ -407,7 +439,7 @@ export default function Home() {
                         <path d="M3 10v11h11"></path>
                       </svg>
                     </button>
-                  </td>
+                  </td> */}
                 </tr>
               ))
             )}

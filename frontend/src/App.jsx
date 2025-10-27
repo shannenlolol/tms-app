@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import { checkGroup } from "./api/users"; 
 import Login from "./pages/Login.jsx";
-import Home from "./pages/Home.jsx";
+import Applications from "./pages/Applications.jsx";
 import AdminHome from "./pages/AdminHome.jsx";
 import UpdateProfile from "./pages/UpdateProfile.jsx";
 import NavBar from "./components/NavBar.jsx";
@@ -128,12 +128,12 @@ export default function App() {
             }
           />
           <Route
-            path="/"
+            path="/applications"
             element={
               <ProtectedRoutes allow={["project", "other"]}>
                 <>
                   <NavBar />
-                  <Home />
+                  <Applications />
                 </>
               </ProtectedRoutes>
             }
@@ -152,7 +152,7 @@ export default function App() {
           />
 
           <Route
-            path="/applications/:acronym/kanban"
+            path="/kanban"
             element={
               <ProtectedRoutes allow={["project", "other"]}>
                 <>
