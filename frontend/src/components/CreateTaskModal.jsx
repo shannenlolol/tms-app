@@ -24,8 +24,14 @@ export default function CreateTaskModal({
 
   const appOptions = apps.map((a) => a.App_Acronym);
 
-  // 🔁 No filtering by Plan_app_Acronym — show everything we received.
-  const planOptions = useMemo(() => plans, [plans]);
+  // Only show plans whose Plan_app_Acronym matches the selected application
+  const planOptions = useMemo(
+    () => (values.Task_app_Acronym
+      ? (plans || []).filter(p => p.Plan_app_Acronym === values.Task_app_Acronym)
+      : []),
+    [plans, values.Task_app_Acronym]
+  );
+  
   const fmt = (d) => {
     if (!d) return "—";
     const x = new Date(d);
@@ -43,8 +49,15 @@ export default function CreateTaskModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative z-10 w-[min(920px,95vw)] rounded-2xl bg-white shadow-2xl p-6">
-        <h2 className="text-xl font-semibold mb-4">Create Task</h2>
-
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-semibold mb-4">Create Task</h2>
+          <button
+            onClick={onClose}
+            className="btn-gray text-white px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300"
+          >
+            X
+          </button>
+        </div>
         {/* Two-column layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* LEFT: core fields */}
@@ -150,17 +163,12 @@ export default function CreateTaskModal({
           <button
             onClick={onSubmit}
             disabled={disabled}
-            className={`px-4 py-2 rounded-lg text-white ${disabled ? "bg-gray-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
+            className={`px-4 py-2 mt-2 rounded-lg text-white ${disabled ? "bg-gray-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
               }`}
           >
             Create Task
           </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300"
-          >
-            Cancel
-          </button>
+
         </div>
       </div>
     </div>

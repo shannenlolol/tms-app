@@ -28,34 +28,22 @@ export async function listPlans(req, res) {
  */
 export async function createPlan(req, res) {
   try {
-    const { Plan_MVP_name, Plan_startDate, Plan_endDate } = req.body || {};
+    const { Plan_MVP_name, Plan_startDate, Plan_endDate, Plan_app_Acronym } = req.body || {};
     const name = String(Plan_MVP_name || "").trim();
-    if (!name) return res.status(400).json({ ok: false, message: "Plan name is required" });
-
-    // dates are optional; if provided, validate
-    const sd = Plan_startDate ? new Date(Plan_startDate) : null;
-    const ed = Plan_endDate ? new Date(Plan_endDate) : null;
-    if (sd && ed && ed < sd) {
-      return res.status(400).json({ ok: false, message: "End date cannot be before start date" });
-    }
+    if (!name) return res.status(400).json({ ok:false, message:"Plan name required" });
 
     await pool.query(
       `INSERT INTO plan (Plan_MVP_name, Plan_startDate, Plan_endDate, Plan_app_Acronym)
-       VALUES (?, ?, ?, NULL)`,
-      [name, Plan_startDate || null, Plan_endDate || null]
+       VALUES (?, ?, ?, ?)`,
+      [name, Plan_startDate || null, Plan_endDate || null, Plan_app_Acronym || null]
     );
 
-    res.status(201).json({
-      Plan_MVP_name: name,
-      Plan_startDate: Plan_startDate || null,
-      Plan_endDate: Plan_endDate || null,
-      Plan_app_Acronym: null,
-    });
+    res.status(201).json({ ok:true });
   } catch (e) {
     if (e?.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ ok: false, message: "Plan name already exists" });
+      return res.status(409).json({ ok:false, message:"Plan already exists" });
     }
-    res.status(500).json({ ok: false, message: e.message || "Failed to create plan" });
+    res.status(500).json({ ok:false, message:e.message || "Failed to create plan" });
   }
 }
 

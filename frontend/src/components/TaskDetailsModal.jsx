@@ -68,40 +68,47 @@ export default function TaskDetailsModal({
   onTake,                // () => void
 }) {
   const [entry, setEntry] = useState("");
-  const [busyAction, setBusyAction] = useState(null); // 'release' | 'take' | null
+  const [busyAction, setBusyAction] = useState(null); // 'release' | 'take' | 'note' | null
 
   const notes = useMemo(() => parseNotes(task?.Task_notes), [task?.Task_notes]);
   if (!open || !task) return null;
 
-  // User can write an entry only when they have action permission in the current state
+  // Only allow writing notes when user has permission in current state
   const canWriteEntry =
     (task.Task_state === "Open" && canOpenActions) ||
     (task.Task_state === "ToDo" && canToDoActions);
 
-  // Append entry (if any) then release; close modal afterwards
-  const handleReleaseClick = async () => {
-    if (busyAction) return;
+  // Separate Add Note action
+  const handleAddNoteClick = async () => {
+    if (busyAction || !entry.trim()) return;
     try {
-      setBusyAction("release");
-      const text = entry.trim();
-      if (text) {
-        try { await onAppendNote?.(text); } catch { }
-        setEntry("");
-      }
-      await onRelease?.();
-      onClose?.(); // close after success
+      setBusyAction("note");
+      await onAppendNote?.(entry.trim());
+      setEntry("");
     } finally {
       setBusyAction(null);
     }
   };
 
-  // Take (no entry append), then close modal
+  // Release (no auto-note append now), then close modal
+  const handleReleaseClick = async () => {
+    if (busyAction) return;
+    try {
+      setBusyAction("release");
+      await onRelease?.();
+      onClose?.();
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  // Take, then close modal
   const handleTakeClick = async () => {
     if (busyAction) return;
     try {
       setBusyAction("take");
       await onTake?.();
-      onClose?.(); // close after success
+      onClose?.();
     } finally {
       setBusyAction(null);
     }
@@ -163,26 +170,29 @@ export default function TaskDetailsModal({
                   disabled={disableAll}
                 >
                   <option value="">— No plan —</option>
-                  {planOptions.map((p) => {
-                    const range =
-                      p.Plan_startDate || p.Plan_endDate
-                        ? ` • ${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)}`
-                        : "";
-                    return (
-                      <option key={p.Plan_MVP_name} value={p.Plan_MVP_name}>
-                        {p.Plan_MVP_name}
-                        {range}
-                      </option>
-                    );
-                  })}
+                  {(planOptions || [])
+                    .filter(p => p.Plan_app_Acronym === task.Task_app_Acronym)  // 👈 filter to this task’s app
+                    .map((p) => {
+                      const range =
+                        p.Plan_startDate || p.Plan_endDate
+                          ? ` • ${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)}`
+                          : "";
+                      return (
+                        <option key={p.Plan_MVP_name} value={p.Plan_MVP_name}>
+                          {p.Plan_MVP_name}{range}
+                        </option>
+                      );
+                    })}
+
                 </select>
 
                 <button
                   type="button"
                   onClick={handleReleaseClick}
                   disabled={disableAll}
-                  className={`mt-8 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-sky-300 cursor-not-allowed" : "bg-sky-600 hover:bg-sky-700"
-                    }`}
+                  className={`mt-8 rounded-md px-3 py-1.5 text-white ${
+                    disableAll ? "bg-sky-300 cursor-not-allowed" : "bg-sky-600 hover:bg-sky-700"
+                  }`}
                 >
                   {busyAction === "release" ? "Releasing…" : "Release Task"}
                 </button>
@@ -191,12 +201,13 @@ export default function TaskDetailsModal({
 
             {/* ACTIONS (ToDo) */}
             {task.Task_state === "ToDo" && canToDoActions && (
-              <div className="mt-3">
+              <div className="mt-6">
+                <Row label="Plan:" value={task.Task_plan} />
                 <button
                   type="button"
                   onClick={handleTakeClick}
                   disabled={disableAll}
-                  className={`rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-indigo-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
+                  className={`rounded-md mt-6 px-3 py-1.5 text-white ${disableAll ? "bg-indigo-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
                     }`}
                 >
                   {busyAction === "take" ? "Taking…" : "Take Task"}
@@ -225,7 +236,7 @@ export default function TaskDetailsModal({
               </div>
             </div>
 
-            {/* Entry is only visible/enabled when user has permission */}
+            {/* Entry + Add Note button (only when permitted) */}
             {canWriteEntry && (
               <div>
                 <div className="mb-1 text-sm">Entry</div>
@@ -237,6 +248,19 @@ export default function TaskDetailsModal({
                   onChange={(e) => setEntry(e.target.value)}
                   disabled={disableAll}
                 />
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={handleAddNoteClick}
+                    disabled={disableAll || !entry.trim()}
+                    className={`rounded-md px-3 py-1.5 text-white ${disableAll || !entry.trim()
+                        ? "bg-gray-300 cursor-not-allowed"
+                        : "bg-indigo-600 hover:bg-indigo-700"
+                      }`}
+                  >
+                    {busyAction === "note" ? "Adding…" : "Add Note"}
+                  </button>
+                </div>
               </div>
             )}
           </div>

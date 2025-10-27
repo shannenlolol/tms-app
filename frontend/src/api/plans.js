@@ -13,4 +13,4 @@ export const getPlans = async (appAcronym) =>
 // POST { Plan_MVP_name, Plan_app_Acronym, Plan_startDate?, Plan_endDate? }
 // -> { Plan_MVP_name, Plan_app_Acronym, Plan_startDate, Plan_endDate }
 export const createPlan = async ({ Plan_MVP_name, Plan_app_Acronym, Plan_startDate, Plan_endDate }) =>
-  (await http.post("/plans", { Plan_MVP_name, Plan_startDate, Plan_endDate })).data;
+  (await http.post("/plans", { Plan_MVP_name, Plan_app_Acronym, Plan_startDate, Plan_endDate })).data;

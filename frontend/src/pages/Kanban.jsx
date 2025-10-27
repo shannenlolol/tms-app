@@ -42,7 +42,7 @@ const fmt = (d) => {
   if (!d) return "—";
   const x = new Date(d);
   if (Number.isNaN(+x)) return String(d);
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`;
 };
 
@@ -103,18 +103,18 @@ export default function Kanban() {
       }
     })();
   }, [ready, isAuthenticated]);
-// Load ALL plans once (so TaskCards can show ranges)
-useEffect(() => {
-  if (!ready || !isAuthenticated) return;
-  (async () => {
-    try {
-      const list = await getPlans(); // no filter -> all plans
-      setPlans(Array.isArray(list) ? list : []);
-    } catch {
-      setPlans([]);
-    }
-  })();
-}, [ready, isAuthenticated]);
+  // Load ALL plans once (so TaskCards can show ranges)
+  useEffect(() => {
+    if (!ready || !isAuthenticated) return;
+    (async () => {
+      try {
+        const list = await getPlans(); // no filter -> all plans
+        setPlans(Array.isArray(list) ? list : []);
+      } catch {
+        setPlans([]);
+      }
+    })();
+  }, [ready, isAuthenticated]);
   // Load all tasks for the board
   const fetchTasks = async () => {
     try {
@@ -180,18 +180,19 @@ useEffect(() => {
   }, [selectedApp, user?.username]);
 
   // ======== details modal helpers ========
-// Build a quick lookup: plan name -> plan object
-const planByName = useMemo(
-  () => new Map((plans || []).map(p => [p.Plan_MVP_name, p])),
-  [plans]
-);
+  // Build a quick lookup: plan name -> plan object
+  const planByName = useMemo(
+    () => new Map((plans || []).map(p => [p.Plan_MVP_name, p])),
+    [plans]
+  );
   const openDetails = async (t) => {
     setActiveTask(t);
 
     // Load plans for that task's app (for plan dropdown when in Open)
     try {
       const list = await getPlans();
-      setActivePlans(Array.isArray(list) ? list : []);
+      const all = Array.isArray(list) ? list : [];
+      setActivePlans(all.filter(p => p.Plan_app_Acronym === t.Task_app_Acronym));
     } catch {
       setActivePlans([]);
     }
@@ -272,36 +273,36 @@ const planByName = useMemo(
 
   // ======== UI helpers ========
 
-function TaskCard({ t }) {
-  const creator = t.Task_owner || t.Task_creator || "—";
-  const planName = t.Task_plan || "";
-  const meta = planName ? planByName.get(planName) : null;
+  function TaskCard({ t }) {
+    const creator = t.Task_owner || t.Task_creator || "—";
+    const planName = t.Task_plan || "";
+    const meta = planName ? planByName.get(planName) : null;
 
-  const range =
-    meta && (meta.Plan_startDate || meta.Plan_endDate)
-      ? ` • ${fmt(meta.Plan_startDate)} - ${fmt(meta.Plan_endDate)}`
-      : "";
+    const range =
+      meta && (meta.Plan_startDate || meta.Plan_endDate)
+        ? ` • ${fmt(meta.Plan_startDate)} - ${fmt(meta.Plan_endDate)}`
+        : "";
 
-  return (
-    <button
-      type="button"
-      onClick={() => openDetails(t)}
-      className="btn-white w-full text-left rounded-xl border border-gray-300 bg-white px-3 py-2 shadow-sm hover:border-indigo-300"
-    >
-      <div className="text-m text-black-500">
-        <span className="font-semibold">{t.Task_id} : {t.Task_name}</span>
-      </div>
+    return (
+      <button
+        type="button"
+        onClick={() => openDetails(t)}
+        className="btn-white w-full text-left rounded-xl border border-gray-300 bg-white px-3 py-2 shadow-sm hover:border-indigo-300"
+      >
+        <div className="text-m text-black-500">
+          <span className="font-semibold">{t.Task_id} : {t.Task_name}</span>
+        </div>
 
-      <div className="mt-4 text-xs text-gray-600">
-        {planName ? `${planName}${range}` : ""}
-      </div>
+        <div className="mt-4 text-xs text-gray-600">
+          {planName ? `${planName}${range}` : ""}
+        </div>
 
-      <div className="mt-2 text-xs text-gray-500">
-        Created by: {creator}
-      </div>
-    </button>
-  );
-}
+        <div className="mt-2 text-xs text-gray-500">
+          Created by: {creator}
+        </div>
+      </button>
+    );
+  }
 
 
   if (!ready) return null;
@@ -328,9 +329,13 @@ function TaskCard({ t }) {
       await createPlan(vals); // { Plan_MVP_name, Plan_startDate, Plan_endDate }
       setPmModalOpen(false);
       setPmErr("");
-      const list = await getPlans( );
-      setActivePlans(Array.isArray(list) ? list : []);
-      
+      const list = await getPlans();
+      const all = Array.isArray(list) ? list : [];
+      setPlans(all);                    // <-- refresh global plans (used by CreateTaskModal)
+      // if the details modal is open, refresh the filtered list for that task too
+      if (activeTask) {
+        setActivePlans(all.filter(p => p.Plan_app_Acronym === activeTask.Task_app_Acronym));
+      }
     } catch (e) {
       const m =
         (typeof e?.response?.data === "string"
@@ -428,11 +433,10 @@ function TaskCard({ t }) {
                   type="button"
                   onClick={openCreateTaskModal}
                   aria-disabled={col !== "Open"}
-                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm transition ${
-                    col === "Open"
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm transition ${col === "Open"
                       ? "bg-indigo-600 text-white hover:bg-indigo-700"
                       : "invisible pointer-events-none select-none"
-                  }`}
+                    }`}
                 >
                   <span className="text-base leading-none">＋</span>
                   <span>Add Task</span>
@@ -483,12 +487,10 @@ function TaskCard({ t }) {
 
       <PlanModal
         open={pmModalOpen}
-        onClose={() => {
-          setPmModalOpen(false);
-          setPmErr("");
-        }}
+        onClose={() => { setPmModalOpen(false); setPmErr(""); }}
         onSubmit={submitNewPlan}
         error={pmErr}
+        apps={apps}
       />
     </div>
   );
