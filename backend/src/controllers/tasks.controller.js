@@ -97,9 +97,14 @@ export async function createTask(req, res) {
     if (!name) return res.status(400).json({ ok: false, message: "Task name is required" });
     if (!acr) return res.status(400).json({ ok: false, message: "Application is required" });
 
-    // initial note stamped with OPEN
-    const raw = String(Task_notes || "").trim();
-    const firstNote = raw ? makeNoteEntry(username, raw, "Open") : null;
+    // Build initial notes:
+    //   - Always include a "task created" entry
+    //   - Optionally include user's initial note, both stamped with Open
+    const createdNote = makeNoteEntry(username, "Task created", "Open");
+    const userNoteRaw = String(Task_notes || "").trim();
+    const initialNotes = userNoteRaw
+      ? createdNote + makeNoteEntry(username, userNoteRaw, "Open")
+      : createdNote;
 
     const allowed = await canUserCreateTaskForApp(username, acr);
     if (!allowed) return res.status(403).json({ ok: false, message: "Not permitted to create tasks for this application" });
@@ -132,7 +137,9 @@ export async function createTask(req, res) {
        (Task_name, Task_description, Task_notes, Task_plan, Task_app_Acronym,
         Task_state, Task_creator, Task_owner, Task_createDate, Task_id)
        VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, CURRENT_DATE, ?)`,
-      [name, Task_description || null, firstNote, plan, acr, username, Task_owner || null, taskId]
+
+      // 🔽 use initialNotes (includes "Task created" + optional initial note)
+      [name, Task_description || null, initialNotes, plan, acr, username, Task_owner || null, taskId]
     );
 
     await conn.commit();
@@ -140,7 +147,7 @@ export async function createTask(req, res) {
     res.status(201).json({
       Task_name: name,
       Task_description: Task_description || null,
-      Task_notes: firstNote,
+      Task_notes: initialNotes,            // 🔽 return the same notes back
       Task_plan: plan,
       Task_app_Acronym: acr,
       Task_state: "Open",
@@ -159,6 +166,7 @@ export async function createTask(req, res) {
     conn.release();
   }
 }
+
 
 export async function appendTaskNote(req, res) {
   try {
@@ -198,7 +206,12 @@ export async function updateTask(req, res) {
     if (!taskName) return res.status(400).json({ ok: false, message: "Task name is required" });
 
     const { Task_plan, Task_state, note } = req.body || {};
-    if (typeof Task_plan === "undefined" && typeof Task_state === "undefined" && !note) {
+
+    // detect which fields are actually present (not just undefined)
+    const planSupplied  = Object.prototype.hasOwnProperty.call(req.body, "Task_plan");
+    const stateSupplied = Object.prototype.hasOwnProperty.call(req.body, "Task_state");
+
+    if (!planSupplied && !stateSupplied && !note) {
       return res.status(400).json({ ok: false, message: "No update fields" });
     }
 
@@ -227,36 +240,42 @@ export async function updateTask(req, res) {
       return checks.some(Boolean);
     };
 
-    // ---- Plan change ----
-    if (typeof Task_plan !== "undefined") {
-      // Allow changing plan when state is Open OR Done
+    // ---- Plan change (silent unless paired with a state action) ----
+    if (planSupplied) {
+      // Only allowed while Open or Done (existing rule)
       if (!(t.Task_state === "Open" || t.Task_state === "Done")) {
         await conn.rollback();
         return res.status(400).json({ ok: false, message: "Plan can only be changed while task is Open or Done" });
       }
 
-      // Permission depends on state
-      const allowed = t.Task_state === "Open"
-        ? await userInAny(permitOpen)
-        : await userInAny(permitDone);
-
+      const allowed =
+        t.Task_state === "Open"
+          ? await userInAny(permitOpen)
+          : await userInAny(permitDone);
       if (!allowed) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to change plan" }); }
 
-      await conn.query("UPDATE task SET Task_plan = ? WHERE Task_name = ?", [Task_plan || null, taskName]);
-      await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, Task_plan ? `Plan changed to "${Task_plan}"` : "Plan cleared"), taskName]
-      );
+      const prevPlan = t.Task_plan ?? null;
+      const nextPlan = Task_plan ? String(Task_plan).trim() : null;
+
+      // Perform the plan update
+      await conn.query("UPDATE task SET Task_plan = ? WHERE Task_name = ?", [nextPlan, taskName]);
+
+      // Only append a "plan changed/cleared" note if this request ALSO changes state
+      if (stateSupplied && prevPlan !== nextPlan) {
+        const planMsg = nextPlan ? `Plan changed to "${nextPlan}"` : "Plan cleared";
+        await conn.query(
+          "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
+          [makeNoteEntry(username, planMsg), taskName]
+        );
+      }
+
+      // Keep local copy in sync for subsequent logic in this transaction
+      t.Task_plan = nextPlan;
     }
 
     // ---- State transitions ----
-
-    // Open -> ToDo (Release)
-    if (Task_state === "ToDo") {
-      if (t.Task_state !== "Open") {
-        await conn.rollback();
-        return res.status(400).json({ ok: false, message: "Only Open tasks can be released" });
-      }
+    // Open/Doing -> ToDo (Release)
+    if (Task_state === "ToDo"  && t.Task_state === "Open") {
       // require a plan before release
       const hasPlan = t.Task_plan != null && String(t.Task_plan).trim() !== "";
       if (!hasPlan) {
@@ -267,11 +286,19 @@ export async function updateTask(req, res) {
         await conn.rollback();
         return res.status(403).json({ ok: false, message: "Not permitted to release this task" });
       }
+
       await conn.query("UPDATE task SET Task_state = 'ToDo' WHERE Task_name = ?", [taskName]);
       await conn.query(
         "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
         [makeNoteEntry(username, `Task moved from "Open" to "ToDo"`), taskName]
       );
+    }
+
+    // Doing -> ToDo (Drop)
+    if (Task_state === "ToDo" && t.Task_state === "Doing") {
+      if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to drop this task" }); }
+      await conn.query("UPDATE task SET Task_state='ToDo', Task_owner=NULL WHERE Task_name=?", [taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task dropped; state Doing → ToDo`), taskName]);
     }
 
     // ToDo -> Doing (Take)
@@ -281,12 +308,7 @@ export async function updateTask(req, res) {
       await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task taken by ${username}; state ToDo → Doing`), taskName]);
     }
 
-    // Doing -> ToDo (Drop)
-    if (Task_state === "ToDo" && t.Task_state === "Doing") {
-      if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to drop this task" }); }
-      await conn.query("UPDATE task SET Task_state='ToDo', Task_owner=NULL WHERE Task_name=?", [taskName]);
-      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task dropped; state Doing → ToDo`), taskName]);
-    }
+
 
     // Doing -> Done (Review)
     if (Task_state === "Done" && t.Task_state === "Doing") {
@@ -309,9 +331,12 @@ export async function updateTask(req, res) {
       await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task rejected; state Done → Doing`), taskName]);
     }
 
-    // Optional free-form note
+    // Optional free-form note (keep behaviour)
     if (note && String(note).trim()) {
-      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, String(note)), taskName]);
+      await conn.query(
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
+        [makeNoteEntry(username, String(note)), taskName]
+      );
     }
 
     await conn.commit();
@@ -324,7 +349,7 @@ export async function updateTask(req, res) {
     );
     res.json(rows[0]);
   } catch (e) {
-    try { await conn.rollback(); } catch { }
+    try { await conn.rollback(); } catch {}
     res.status(500).json({ ok: false, message: e.message || "Failed to update task" });
   } finally {
     conn.release();

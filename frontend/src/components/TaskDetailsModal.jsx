@@ -1,5 +1,5 @@
 // src/components/TaskDetailsModal.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
 // Keep in sync with backend NOTE_SEP
 const NOTE_SEP = "\n--- NOTE ENTRY ---\n";
@@ -87,13 +87,21 @@ export default function TaskDetailsModal({
   const [busyAction, setBusyAction] = useState(null); // 'release' | 'take' | 'note' | null
   const [msg, setMsg] = useState("");
 
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(() => setMsg(""), 5000);
+    return () => clearTimeout(t);
+  }, [msg]);
+
   const notes = useMemo(() => parseNotes(task?.Task_notes), [task?.Task_notes]);
   if (!open || !task) return null;
 
   // Only allow writing notes when user has permission in current state
   const canWriteEntry =
     (task.Task_state === "Open" && canOpenActions) ||
-    (task.Task_state === "ToDo" && canToDoActions);
+    (task.Task_state === "ToDo" && canToDoActions) ||
+    (task.Task_state === "Doing" && canDoingActions) ||
+    (task.Task_state === "Done" && canDoneActions);
 
   // Separate Add Note action
   const handleAddNoteClick = async () => {
@@ -230,11 +238,11 @@ export default function TaskDetailsModal({
                     })}
 
                 </select>
-{msg && (
-  <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-    {msg}
-  </div>
-)}
+                {msg && (
+                  <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    {msg}
+                  </div>
+                )}
 
                 <button
                   type="button"
