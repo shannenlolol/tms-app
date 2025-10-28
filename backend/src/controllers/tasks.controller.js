@@ -91,11 +91,11 @@ export async function createTask(req, res) {
     } = req.body || {};
 
     const name = String(Task_name || "").trim();
-    const acr  = String(Task_app_Acronym || "").trim();
+    const acr = String(Task_app_Acronym || "").trim();
     const plan = Task_plan ? String(Task_plan).trim() : null;
 
     if (!name) return res.status(400).json({ ok: false, message: "Task name is required" });
-    if (!acr)  return res.status(400).json({ ok: false, message: "Application is required" });
+    if (!acr) return res.status(400).json({ ok: false, message: "Application is required" });
 
     // initial note stamped with OPEN
     const raw = String(Task_notes || "").trim();
@@ -121,7 +121,7 @@ export async function createTask(req, res) {
     }
 
     const current = Number(apps[0].App_Rnumber || 0);
-    const nextR   = current + 1;
+    const nextR = current + 1;
 
     await conn.query("UPDATE application SET App_Rnumber = ? WHERE App_Acronym = ?", [nextR, acr]);
 
@@ -150,7 +150,7 @@ export async function createTask(req, res) {
       Task_id: taskId,
     });
   } catch (e) {
-    try { await conn.rollback(); } catch {}
+    try { await conn.rollback(); } catch { }
     if (e?.code === "ER_DUP_ENTRY") {
       return res.status(409).json({ ok: false, message: "Task name or Task_id already exists" });
     }
@@ -211,7 +211,7 @@ export async function updateTask(req, res) {
     if (!t) { await conn.rollback(); return res.status(404).json({ ok: false, message: "Task not found" }); }
 
     const [[a]] = await conn.query(
-      `SELECT App_Acronym, App_permit_Open, App_permit_toDoList
+      `SELECT App_Acronym, App_permit_Open, App_permit_toDoList, App_permit_Done
        FROM application WHERE App_Acronym = ? LIMIT 1`,
       [t.Task_app_Acronym]
     );
@@ -219,20 +219,7 @@ export async function updateTask(req, res) {
 
     const permitOpen = csv(a.App_permit_Open);
     const permitToDo = csv(a.App_permit_toDoList);
-
-    const isUserInGroup = async (username, groupName) => {
-      // Your accounts table stores CSV of groups; emulate checkGroup logic here:
-      const [[row]] = await conn.query(
-        "SELECT usergroups FROM accounts WHERE username = ? LIMIT 1",
-        [username]
-      );
-      if (!row) return false;
-      const list = String(row.usergroups || "")
-        .split(",")
-        .map(s => s.trim().toLowerCase())
-        .filter(Boolean);
-      return list.includes(String(groupName || "").toLowerCase());
-    };
+    const permitDone = csv(a.App_permit_Done);
 
     const userInAny = async (groups) => {
       if (!groups.length) return false;
@@ -240,53 +227,91 @@ export async function updateTask(req, res) {
       return checks.some(Boolean);
     };
 
-    // Track effective state for optional free-form note at end
-    let effectiveState = t.Task_state;
-
-    // Change plan (only in Open; status stamp uses current state)
+    // ---- Plan change ----
     if (typeof Task_plan !== "undefined") {
-      if (t.Task_state !== "Open") { await conn.rollback(); return res.status(400).json({ ok: false, message: "Plan can only be changed while task is Open" }); }
-      if (!(await userInAny(permitOpen))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to change plan" }); }
+      // Allow changing plan when state is Open OR Done
+      if (!(t.Task_state === "Open" || t.Task_state === "Done")) {
+        await conn.rollback();
+        return res.status(400).json({ ok: false, message: "Plan can only be changed while task is Open or Done" });
+      }
+
+      // Permission depends on state
+      const allowed = t.Task_state === "Open"
+        ? await userInAny(permitOpen)
+        : await userInAny(permitDone);
+
+      if (!allowed) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to change plan" }); }
 
       await conn.query("UPDATE task SET Task_plan = ? WHERE Task_name = ?", [Task_plan || null, taskName]);
       await conn.query(
         "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, Task_plan ? `Plan changed to "${Task_plan}"` : "Plan cleared", t.Task_state), taskName]
+        [makeNoteEntry(username, Task_plan ? `Plan changed to "${Task_plan}"` : "Plan cleared"), taskName]
       );
     }
 
-    // Release: Open -> ToDo (stamp TODO)
+    // ---- State transitions ----
+
+    // Open -> ToDo (Release)
     if (Task_state === "ToDo") {
-      if (t.Task_state !== "Open") { await conn.rollback(); return res.status(400).json({ ok: false, message: "Only Open tasks can be released" }); }
-      if (!(await userInAny(permitOpen))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to release this task" }); }
-
+      if (t.Task_state !== "Open") {
+        await conn.rollback();
+        return res.status(400).json({ ok: false, message: "Only Open tasks can be released" });
+      }
+      // require a plan before release
+      const hasPlan = t.Task_plan != null && String(t.Task_plan).trim() !== "";
+      if (!hasPlan) {
+        await conn.rollback();
+        return res.status(400).json({ ok: false, message: "A plan must be selected before releasing this task" });
+      }
+      if (!(await userInAny(permitOpen))) {
+        await conn.rollback();
+        return res.status(403).json({ ok: false, message: "Not permitted to release this task" });
+      }
       await conn.query("UPDATE task SET Task_state = 'ToDo' WHERE Task_name = ?", [taskName]);
-      effectiveState = "ToDo";
       await conn.query(
         "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, `Task moved from "Open" to "ToDo"`, effectiveState), taskName]
+        [makeNoteEntry(username, `Task moved from "Open" to "ToDo"`), taskName]
       );
     }
 
-    // Take: ToDo -> Doing (stamp DOING)
-    if (Task_state === "Doing") {
-      if (t.Task_state !== "ToDo") { await conn.rollback(); return res.status(400).json({ ok: false, message: "Only ToDo tasks can be taken" }); }
+    // ToDo -> Doing (Take)
+    if (Task_state === "Doing" && t.Task_state === "ToDo") {
       if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to take this task" }); }
-
       await conn.query("UPDATE task SET Task_state='Doing', Task_owner=? WHERE Task_name=?", [username, taskName]);
-      effectiveState = "Doing";
-      await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, `Task taken by ${username}; state ToDo → Doing`, effectiveState), taskName]
-      );
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task taken by ${username}; state ToDo → Doing`), taskName]);
     }
 
-    // Optional free-form note (uses effective state after any changes above)
+    // Doing -> ToDo (Drop)
+    if (Task_state === "ToDo" && t.Task_state === "Doing") {
+      if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to drop this task" }); }
+      await conn.query("UPDATE task SET Task_state='ToDo', Task_owner=NULL WHERE Task_name=?", [taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task dropped; state Doing → ToDo`), taskName]);
+    }
+
+    // Doing -> Done (Review)
+    if (Task_state === "Done" && t.Task_state === "Doing") {
+      if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to review this task" }); }
+      await conn.query("UPDATE task SET Task_state='Done' WHERE Task_name=?", [taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task reviewed; state Doing → Done`), taskName]);
+    }
+
+    // Done -> Closed (Approve)
+    if (Task_state === "Closed" && t.Task_state === "Done") {
+      if (!(await userInAny(permitDone))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to approve this task" }); }
+      await conn.query("UPDATE task SET Task_state='Closed' WHERE Task_name=?", [taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task approved; state Done → Closed`), taskName]);
+    }
+
+    // Done -> Doing (Reject)
+    if (Task_state === "Doing" && t.Task_state === "Done") {
+      if (!(await userInAny(permitDone))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to reject this task" }); }
+      await conn.query("UPDATE task SET Task_state='Doing' WHERE Task_name=?", [taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task rejected; state Done → Doing`), taskName]);
+    }
+
+    // Optional free-form note
     if (note && String(note).trim()) {
-      await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, String(note), effectiveState), taskName]
-      );
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, String(note)), taskName]);
     }
 
     await conn.commit();
@@ -299,7 +324,7 @@ export async function updateTask(req, res) {
     );
     res.json(rows[0]);
   } catch (e) {
-    try { await conn.rollback(); } catch {}
+    try { await conn.rollback(); } catch { }
     res.status(500).json({ ok: false, message: e.message || "Failed to update task" });
   } finally {
     conn.release();

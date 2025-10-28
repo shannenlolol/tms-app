@@ -71,6 +71,8 @@ export default function Kanban() {
   const [activePlans, setActivePlans] = useState([]);
   const [canOpenActions, setCanOpenActions] = useState(false);
   const [canToDoActions, setCanToDoActions] = useState(false);
+  const [canDoingActions, setCanDoingActions] = useState(false);
+  const [canDoneActions, setCanDoneActions] = useState(false);
 
   // PM-only "Add Plan" modal
   const [pmModalOpen, setPmModalOpen] = useState(false);
@@ -202,6 +204,8 @@ export default function Kanban() {
     const permitOpenCSV = app?.App_permit_Open ?? app?.Permit_Open ?? "";
     const permitToDoCSV =
       app?.App_permit_toDoList ?? app?.Permit_ToDo ?? "";
+    const permitDoingCSV = app?.App_permit_Doing ?? app?.Permit_Doing ?? "";
+    const permitDoneCSV = app?.App_permit_Done ?? app?.Permit_Done ?? "";
 
     const openGroups = String(permitOpenCSV)
       .split(",")
@@ -211,11 +215,12 @@ export default function Kanban() {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-
+    const doingGroups = String(permitDoingCSV).split(",").map(s => s.trim()).filter(Boolean);
+    const doneGroups = String(permitDoneCSV).split(",").map(s => s.trim()).filter(Boolean);
     const username = String(user?.username || "").trim();
     let openAllowed = false,
       todoAllowed = false;
-
+    let doingAllowed = false, doneAllowed = false;
     if (username) {
       if (openGroups.length) {
         const checks = await Promise.all(
@@ -229,11 +234,14 @@ export default function Kanban() {
         );
         todoAllowed = checks2.some(Boolean);
       }
+      if (doingGroups.length) { const c = await Promise.all(doingGroups.map(g => checkGroup(username, g))); doingAllowed = c.some(Boolean); }
+      if (doneGroups.length) { const c = await Promise.all(doneGroups.map(g => checkGroup(username, g))); doneAllowed = c.some(Boolean); }
     }
 
     setCanOpenActions(openAllowed);
     setCanToDoActions(todoAllowed);
-
+    setCanDoingActions(doingAllowed);
+    setCanDoneActions(doneAllowed);
     setDetailsOpen(true);
   };
 
@@ -270,7 +278,19 @@ export default function Kanban() {
     await updateTask(activeTask.Task_name, { Task_state: "Doing" });
     await refreshAndSync(activeTask.Task_name);
   };
+  const handleDrop = async () => { if (!activeTask) return; await updateTask(activeTask.Task_name, { Task_state: "ToDo" }); await refreshAndSync(activeTask.Task_name); };
+  const handleReview = async () => { if (!activeTask) return; await updateTask(activeTask.Task_name, { Task_state: "Done" }); await refreshAndSync(activeTask.Task_name); };
+  const handleApprove = async () => {
+    if (!activeTask) return;
+    await updateTask(activeTask.Task_name, { Task_state: "Closed" }); // Done -> Closed
+    await refreshAndSync(activeTask.Task_name);
+  };
 
+  const handleReject = async () => {
+    if (!activeTask) return;
+    await updateTask(activeTask.Task_name, { Task_state: "Doing" });  // Done -> Doing
+    await refreshAndSync(activeTask.Task_name);
+  };
   // ======== UI helpers ========
 
   function TaskCard({ t }) {
@@ -280,27 +300,39 @@ export default function Kanban() {
 
     const range =
       meta && (meta.Plan_startDate || meta.Plan_endDate)
-        ? ` • ${fmt(meta.Plan_startDate)} - ${fmt(meta.Plan_endDate)}`
+        ? `${fmt(meta.Plan_startDate)} - ${fmt(meta.Plan_endDate)}`
         : "";
 
     return (
-      <button
-        type="button"
-        onClick={() => openDetails(t)}
-        className="btn-white w-full text-left rounded-xl border border-gray-300 bg-white px-3 py-2 shadow-sm hover:border-indigo-300"
-      >
-        <div className="text-m text-black-500">
-          <span className="font-semibold">{t.Task_id} : {t.Task_name}</span>
-        </div>
+          <button
+      type="button"
+      onClick={() => openDetails(t)}
+      className="btn-white w-full text-left rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm hover:shadow-md hover:border-indigo-300 transition"
+    >
+      {/* Title */}
+      <div className="text-base text-gray-900">
+        <span className="font-semibold">{t.Task_id} : {t.Task_name}</span>
+      </div>
 
-        <div className="mt-4 text-xs text-gray-600">
-          {planName ? `${planName}${range}` : ""}
+      {/* Plan chip */}
+      {planName ? (
+        <div className="mt-3 mb-3 inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+          {planName}
         </div>
+      ) : null}
 
-        <div className="mt-2 text-xs text-gray-500">
-          Created by: {creator}
+      {/* Date range */}
+      {range ? (
+        <div className="mt-1 text-xs text-gray-600">
+          {range}
         </div>
-      </button>
+      ) : null}
+
+      {/* Footer meta */}
+      <div className="mt-3 text-xs text-gray-500">
+        Created by: {creator}
+      </div>
+    </button>
     );
   }
 
@@ -434,8 +466,8 @@ export default function Kanban() {
                   onClick={openCreateTaskModal}
                   aria-disabled={col !== "Open"}
                   className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm transition ${col === "Open"
-                      ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                      : "invisible pointer-events-none select-none"
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                    : "invisible pointer-events-none select-none"
                     }`}
                 >
                   <span className="text-base leading-none">＋</span>
@@ -483,6 +515,12 @@ export default function Kanban() {
         onChangePlan={handleChangePlan}
         onRelease={handleRelease}
         onTake={handleTake}
+        canDoingActions={canDoingActions}
+        canDoneActions={canDoneActions}
+        onDrop={handleDrop}
+        onReview={handleReview}
+        onApprove={handleApprove}
+        onReject={handleReject}
       />
 
       <PlanModal

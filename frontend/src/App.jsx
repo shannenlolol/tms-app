@@ -51,8 +51,8 @@ function useRoleFlags(user) {
 
 function homeForRoles(flags) {
   if (flags.isAdmin) return "/admin";
-  if (flags.isProjectSide) return "/";
-  if (flags.isOther) return "/";
+  if (flags.isProjectSide) return "/kanban";
+  if (flags.isOther) return "/kanban";
   return "/login";
 }
 

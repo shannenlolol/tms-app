@@ -54,6 +54,16 @@ const Row = ({ label, value }) => (
     <div className="flex-1">{value || <span className="text-gray-400">—</span>}</div>
   </div>
 );
+const planLabel = (planName, options) => {
+  if (!planName) return "";
+  const meta = (options || []).find(p => p.Plan_MVP_name === planName);
+  if (!meta) return planName;
+  const range =
+    meta.Plan_startDate || meta.Plan_endDate
+      ? ` (${fmt(meta.Plan_startDate)} - ${fmt(meta.Plan_endDate)})`
+      : "";
+  return `${planName}${range}`;
+};
 
 export default function TaskDetailsModal({
   open,
@@ -63,12 +73,19 @@ export default function TaskDetailsModal({
   planOptions = [],      // [{ Plan_MVP_name, Plan_app_Acronym, Plan_startDate, Plan_endDate }, ...]
   canOpenActions = false,
   canToDoActions = false,
-  onChangePlan,          // (newPlan|null) => void
-  onRelease,             // () => void
-  onTake,                // () => void
+  canDoingActions = false,
+  canDoneActions = false,
+  onChangePlan,
+  onRelease,
+  onTake,
+  onDrop,
+  onReview,
+  onApprove,
+  onReject,
 }) {
   const [entry, setEntry] = useState("");
   const [busyAction, setBusyAction] = useState(null); // 'release' | 'take' | 'note' | null
+  const [msg, setMsg] = useState("");
 
   const notes = useMemo(() => parseNotes(task?.Task_notes), [task?.Task_notes]);
   if (!open || !task) return null;
@@ -93,10 +110,18 @@ export default function TaskDetailsModal({
   // Release (no auto-note append now), then close modal
   const handleReleaseClick = async () => {
     if (busyAction) return;
+    // client-side precheck to match new backend rule
+    if (!task.Task_plan || String(task.Task_plan).trim() === "") {
+      setMsg("Please select a plan before releasing this task.");
+      return;
+    }
     try {
       setBusyAction("release");
       await onRelease?.();
       onClose?.();
+    }
+    catch (e) {
+      setMsg(extractErr(e));
     } finally {
       setBusyAction(null);
     }
@@ -113,7 +138,16 @@ export default function TaskDetailsModal({
       setBusyAction(null);
     }
   };
-
+  // tiny helper to pull a readable error message
+  function extractErr(err) {
+    const d = err?.response?.data;
+    return (
+      d?.message ||
+      d?.error ||
+      err?.message ||
+      "Something went wrong while releasing the task"
+    );
+  }
   const disableAll = !!busyAction;
 
   return (
@@ -159,6 +193,14 @@ export default function TaskDetailsModal({
               <Row label="Created On:" value={fmtDMY(task.Task_createDate)} />
             </div>
 
+
+            {/* Show plan for states other than open/done */}
+            {!(task.Task_state === "Open" && canOpenActions) && !(task.Task_state === "Done" && canDoneActions) && (
+              <div className="mt-6">
+                <Row label="Plan:" value={planLabel(task.Task_plan, planOptions)} />
+              </div>
+            )}
+
             {/* ACTIONS (Open) */}
             {task.Task_state === "Open" && canOpenActions && (
               <div className="mt-8 space-y-2">
@@ -166,7 +208,10 @@ export default function TaskDetailsModal({
                 <select
                   className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none focus:border-indigo-400"
                   value={task.Task_plan || ""}
-                  onChange={(e) => onChangePlan?.(e.target.value || null)}
+                  onChange={(e) => {
+                    setMsg("");
+                    onChangePlan?.(e.target.value || null);
+                  }}
                   disabled={disableAll}
                 >
                   <option value="">— No plan —</option>
@@ -175,7 +220,7 @@ export default function TaskDetailsModal({
                     .map((p) => {
                       const range =
                         p.Plan_startDate || p.Plan_endDate
-                          ? ` • ${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)}`
+                          ? ` (${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)})`
                           : "";
                       return (
                         <option key={p.Plan_MVP_name} value={p.Plan_MVP_name}>
@@ -185,14 +230,18 @@ export default function TaskDetailsModal({
                     })}
 
                 </select>
+{msg && (
+  <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+    {msg}
+  </div>
+)}
 
                 <button
                   type="button"
                   onClick={handleReleaseClick}
                   disabled={disableAll}
-                  className={`mt-8 rounded-md px-3 py-1.5 text-white ${
-                    disableAll ? "bg-sky-300 cursor-not-allowed" : "bg-sky-600 hover:bg-sky-700"
-                  }`}
+                  className={`mt-8 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-sky-300 cursor-not-allowed" : "bg-sky-600 hover:bg-sky-700"
+                    }`}
                 >
                   {busyAction === "release" ? "Releasing…" : "Release Task"}
                 </button>
@@ -202,7 +251,6 @@ export default function TaskDetailsModal({
             {/* ACTIONS (ToDo) */}
             {task.Task_state === "ToDo" && canToDoActions && (
               <div className="mt-6">
-                <Row label="Plan:" value={task.Task_plan} />
                 <button
                   type="button"
                   onClick={handleTakeClick}
@@ -214,6 +262,78 @@ export default function TaskDetailsModal({
                 </button>
               </div>
             )}
+
+            {/* ACTIONS (Doing) */}
+            {task.Task_state === "Doing" && canDoingActions && (
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={async () => { if (busyAction) return; setBusyAction("review"); await onReview?.(); onClose?.(); setBusyAction(null); }}
+                  disabled={disableAll}
+                  className={`btn-green mt-6 mr-4 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-emerald-300 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                >
+                  {busyAction === "review" ? "Reviewing…" : "Review Task"}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => { if (busyAction) return; setBusyAction("drop"); await onDrop?.(); onClose?.(); setBusyAction(null); }}
+                  disabled={disableAll}
+                  className={`btn-red rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-amber-300 cursor-not-allowed" : "bg-amber-600 hover:bg-amber-700"}`}
+                >
+                  {busyAction === "drop" ? "Dropping…" : "Drop Task"}
+                </button>
+
+              </div>
+            )}
+
+            {/* ACTIONS (Done) */}
+            {task.Task_state === "Done" && canDoneActions && (
+
+              <div className="mt-6">
+                <div className="text-sm text-gray-600">Plan:</div>
+
+                <select
+                  className="mt-2 w-full rounded-md border border-gray-300 bg-white px-3 py-2 outline-none focus:border-indigo-400"
+                  value={task.Task_plan || ""}
+                  onChange={(e) => onChangePlan?.(e.target.value || null)}
+                  disabled={disableAll}
+                >
+                  <option value="">— No plan —</option>
+                  {(planOptions || [])
+                    .filter(p => p.Plan_app_Acronym === task.Task_app_Acronym)  // 👈 filter to this task’s app
+                    .map((p) => {
+                      const range =
+                        p.Plan_startDate || p.Plan_endDate
+                          ? ` (${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)})`
+                          : "";
+                      return (
+                        <option key={p.Plan_MVP_name} value={p.Plan_MVP_name}>
+                          {p.Plan_MVP_name}{range}
+                        </option>
+                      );
+                    })}
+
+                </select>
+                <button
+                  type="button"
+                  onClick={async () => { if (busyAction) return; setBusyAction("approve"); await onApprove?.(); onClose?.(); setBusyAction(null); }}
+                  disabled={disableAll}
+                  className={`btn-green mt-6 mr-4 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-slate-300 cursor-not-allowed" : "bg-slate-700 hover:bg-slate-800"}`}
+                >
+                  {busyAction === "approve" ? "Approving…" : "Approve Task"}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => { if (busyAction) return; setBusyAction("reject"); await onReject?.(); onClose?.(); setBusyAction(null); }}
+                  disabled={disableAll}
+                  className={`btn-red rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-rose-300 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"}`}
+                >
+                  {busyAction === "reject" ? "Rejecting…" : "Reject Task"}
+                </button>
+              </div>
+            )}
+
+
           </div>
 
           {/* RIGHT: Notes + (conditional) Entry */}
@@ -254,8 +374,8 @@ export default function TaskDetailsModal({
                     onClick={handleAddNoteClick}
                     disabled={disableAll || !entry.trim()}
                     className={`rounded-md px-3 py-1.5 text-white ${disableAll || !entry.trim()
-                        ? "bg-gray-300 cursor-not-allowed"
-                        : "bg-indigo-600 hover:bg-indigo-700"
+                      ? "bg-gray-300 cursor-not-allowed"
+                      : "bg-indigo-600 hover:bg-indigo-700"
                       }`}
                   >
                     {busyAction === "note" ? "Adding…" : "Add Note"}

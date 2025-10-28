@@ -90,6 +90,7 @@ button:focus-visible {
   button.btn-gray { background-color: #828385; border-color: #e3e3e3;}
   button.btn-white { background-color: #ffffff; border-color: #e3e3e3;}
   button.btn-green { background-color: #4ea863; }
+  button.btn-red { background-color: #a84e4e; }
   button.btn-black { background-color: #000000; }
 
   /* Disabled state */

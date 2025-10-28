@@ -31,7 +31,7 @@ export default function CreateTaskModal({
       : []),
     [plans, values.Task_app_Acronym]
   );
-  
+
   const fmt = (d) => {
     if (!d) return "—";
     const x = new Date(d);
@@ -59,7 +59,7 @@ export default function CreateTaskModal({
           </button>
         </div>
         {/* Two-column layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {/* LEFT: core fields */}
           <div className="space-y-3">
             <label className="block">
@@ -109,7 +109,7 @@ export default function CreateTaskModal({
                 {planOptions.map((p) => {
                   const range =
                     p.Plan_startDate || p.Plan_endDate
-                      ? ` • ${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)}`
+                      ? ` (${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)})`
                       : "";
                   return (
                     <option key={p.Plan_MVP_name} value={p.Plan_MVP_name}>
@@ -124,7 +124,7 @@ export default function CreateTaskModal({
           </div>
 
           {/* RIGHT: Notes list + Entry */}
-          <div className="space-y-3">
+          {/* <div className="space-y-3">
             <div>
               <div className="text-sm mb-1">Notes</div>
               <div className="min-h-[120px] rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
@@ -150,7 +150,7 @@ export default function CreateTaskModal({
                 onChange={(e) => change("Task_notes", e.target.value)}
               />
             </label>
-          </div>
+          </div> */}
         </div>
 
         {error && (
