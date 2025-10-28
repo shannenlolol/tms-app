@@ -1,7 +1,7 @@
-// src/components/PlanModal.jsx
+// src/components/CreatePlanModal.jsx
 import React, { useState } from "react";
 
-export default function PlanModal({ open, onClose, onSubmit, error, apps = [] }) {
+export default function CreatePlanModal({ open, onClose, onSubmit, error, apps = [] }) {
   const [name, setName] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -18,6 +18,21 @@ export default function PlanModal({ open, onClose, onSubmit, error, apps = [] })
       Plan_app_Acronym: appAcr, // 👈 include selected app
     });
     setName(""); setStart(""); setEnd(""); setAppAcr("");
+  };
+  // 27 Oct 2025-style date
+  const fmt = (d) => {
+    if (!d) return "";
+    const x = new Date(d);
+    if (Number.isNaN(+x)) return String(d);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`;
+  };
+
+  const appLabel = (a) => {
+    const s = fmt(a.App_startDate);
+    const e = fmt(a.App_endDate);
+    const range = (s || e) ? ` (${s || "?"} - ${e || "?"})` : "";
+    return `${a.App_Acronym}${range}`;
   };
 
   if (!open) return null;
@@ -55,9 +70,9 @@ export default function PlanModal({ open, onClose, onSubmit, error, apps = [] })
               onChange={(e) => setAppAcr(e.target.value)}
             >
               <option value="">Select an application…</option>
-              {apps.map(a => (
+              {apps.map((a) => (
                 <option key={a.App_Acronym} value={a.App_Acronym}>
-                  {a.App_Acronym}
+                  {appLabel(a)}
                 </option>
               ))}
             </select>

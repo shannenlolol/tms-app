@@ -21,6 +21,7 @@ const normCSV = (v) => {
     .filter(Boolean)
     .join(","); // store as comma-separated in DB
 };
+const isNonEmptyCSV = (v) => normCSV(v).length > 0;
 
 function isValidDateStr(s) {
   if (!s) return true;
@@ -83,25 +84,52 @@ export async function createApplication(req, res, next) {
     const body = req.body || {};
     const App_Acronym     = asStr(body.App_Acronym).trim();
     const App_Description = asStr(body.App_Description);
-    const App_startDate   = asStr(body.App_startDate);
-    const App_endDate     = asStr(body.App_endDate);
+    const App_startDate   = asStr(body.App_startDate); // REQUIRED
+    const App_endDate     = asStr(body.App_endDate);   // REQUIRED
 
-    // NEW permits
+    // Normalised CSV permits (all REQUIRED)
     const App_permit_Create   = normCSV(body.Permit_Create);
     const App_permit_Open     = normCSV(body.Permit_Open);
     const App_permit_toDoList = normCSV(body.Permit_ToDo);
     const App_permit_Doing    = normCSV(body.Permit_Doing);
     const App_permit_Done     = normCSV(body.Permit_Done);
 
+    // ---- Required checks ----
     if (!App_Acronym) {
       return res.status(400).json({ ok: false, message: "App_Acronym is required" });
     }
+    if (!App_startDate) {
+      return res.status(400).json({ ok: false, message: "App_startDate is required" });
+    }
+    if (!App_endDate) {
+      return res.status(400).json({ ok: false, message: "App_endDate is required" });
+    }
+
+    // Date format & order checks
     if (!isValidDateStr(App_startDate) || !isValidDateStr(App_endDate)) {
       return res.status(400).json({ ok: false, message: "Invalid date format" });
     }
-    if (App_startDate && App_endDate && new Date(App_endDate) < new Date(App_startDate)) {
+    if (new Date(App_endDate) < new Date(App_startDate)) {
       return res.status(400).json({ ok: false, message: "End date cannot be before start date" });
     }
+
+    // Permit CSVs must not be empty
+    if (!isNonEmptyCSV(body.Permit_Create)) {
+      return res.status(400).json({ ok: false, message: "Permit_Create must contain at least one group" });
+    }
+    if (!isNonEmptyCSV(body.Permit_Open)) {
+      return res.status(400).json({ ok: false, message: "Permit_Open must contain at least one group" });
+    }
+    if (!isNonEmptyCSV(body.Permit_ToDo)) {
+      return res.status(400).json({ ok: false, message: "Permit_ToDo must contain at least one group" });
+    }
+    if (!isNonEmptyCSV(body.Permit_Doing)) {
+      return res.status(400).json({ ok: false, message: "Permit_Doing must contain at least one group" });
+    }
+    if (!isNonEmptyCSV(body.Permit_Done)) {
+      return res.status(400).json({ ok: false, message: "Permit_Done must contain at least one group" });
+    }
+    // -------------------------
 
     // Uniqueness on acronym
     const [exist] = await pool.query(
@@ -112,7 +140,7 @@ export async function createApplication(req, res, next) {
       return res.status(409).json({ ok: false, message: "App_Acronym already exists" });
     }
 
-    // INSERT; App_Rnumber is AUTO_INCREMENT
+    // INSERT
     await pool.query(
       `INSERT INTO application
         (App_Acronym, App_Description, App_startDate, App_endDate,
@@ -121,30 +149,22 @@ export async function createApplication(req, res, next) {
       [
         App_Acronym,
         App_Description || null,
-        App_startDate || null,
-        App_endDate || null,
-        App_permit_Create || null,
-        App_permit_Open || null,
-        App_permit_toDoList || null,
-        App_permit_Doing || null,
-        App_permit_Done || null,
+        App_startDate,       // required & validated
+        App_endDate,         // required & validated
+        App_permit_Create,   // required & non-empty
+        App_permit_Open,     // required & non-empty
+        App_permit_toDoList, // required & non-empty
+        App_permit_Doing,    // required & non-empty
+        App_permit_Done,     // required & non-empty
       ]
     );
 
-    // Return created row + task count
+    // Return created row
     const [rows] = await pool.query(
       `
       SELECT
-        a.App_Acronym,
-        a.App_Description,
-        a.App_Rnumber,
-        a.App_startDate,
-        a.App_endDate,
-        a.App_permit_Create,
-        a.App_permit_Open,
-        a.App_permit_toDoList,
-        a.App_permit_Doing,
-        a.App_permit_Done,
+        a.App_Acronym, a.App_Description, a.App_Rnumber, a.App_startDate, a.App_endDate,
+        a.App_permit_Create, a.App_permit_Open, a.App_permit_toDoList, a.App_permit_Doing, a.App_permit_Done,
         ${TASK_COUNT_SQL} AS App_taskCount
       FROM application a
       WHERE a.App_Acronym = ?

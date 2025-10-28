@@ -8,7 +8,7 @@ import { checkGroup } from "../api/users";
 import CreateTaskModal from "../components/CreateTaskModal";
 import TaskDetailsModal from "../components/TaskDetailsModal";
 import { getPlans, createPlan } from "../api/plans";
-import PlanModal from "../components/PlanModal";
+import CreatePlanModal from "../components/CreatePlanModal";
 
 const COLUMNS = ["Open", "To-Do", "Doing", "Done", "Closed"];
 const STATE_MAP = {
@@ -523,7 +523,7 @@ export default function Kanban() {
         onReject={handleReject}
       />
 
-      <PlanModal
+      <CreatePlanModal
         open={pmModalOpen}
         onClose={() => { setPmModalOpen(false); setPmErr(""); }}
         onSubmit={submitNewPlan}

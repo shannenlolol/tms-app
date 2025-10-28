@@ -189,9 +189,7 @@ export default function TaskDetailsModal({
             <div className="mt-2">
               <div className="mb-1 text-sm text-gray-500">Task Description:</div>
               <div className="min-h-[72px] whitespace-pre-wrap rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
-                {task.Task_description || (
-                  <span className="italic text-gray-400">Insert Description here</span>
-                )}
+                {task.Task_description}
               </div>
             </div>
 

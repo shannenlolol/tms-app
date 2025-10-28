@@ -159,7 +159,7 @@ export async function createTask(req, res) {
   } catch (e) {
     try { await conn.rollback(); } catch { }
     if (e?.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ ok: false, message: "Task name or Task_id already exists" });
+      return res.status(409).json({ ok: false, message: "Task name already exists" });
     }
     return res.status(500).json({ ok: false, message: e.message });
   } finally {

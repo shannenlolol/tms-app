@@ -1,22 +1,74 @@
 // src/components/CreateTaskModal.jsx
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-export default function CreateTaskModal({
-  open,
-  onClose,
-  onSubmit,
-  values,          // { Task_app_Acronym, Task_name, Task_description, Task_plan, Task_notes }
-  setValues,
-  error,
-  apps = [],
-  plans = [],      // pass ALL plans here if you want truly free selection
-  canCreate,
-  existingNotes = [],
-}) {
+export default function CreateTaskModal({ ...props }) {
+  const {
+    open,
+    onClose,
+    onSubmit,
+    values,
+    setValues,
+    error,
+    apps = [],
+    plans = [],
+    canCreate,
+    existingNotes = [],
+  } = props;
+
   if (!open) return null;
+
   const change = (k, v) => setValues((prev) => ({ ...prev, [k]: v }));
 
-  // (optional) clear selected plan when app changes; keep if you want to avoid cross-app mismatches
+  // -------------------- Error banner with timeout (robust) --------------------
+  const [msg, setMsg] = useState(null); // { text: string, key: number } | null
+  const timerRef = useRef(null);
+
+  // Derive a stable string from `error`
+  const errorText =
+    typeof error === "string"
+      ? error
+      : (error && (error.message || error.error || String(error))) || "";
+
+  // Whenever parent supplies a (truthy) error, set a NEW object with a unique key
+  useEffect(() => {
+    if (!errorText) return;
+    setMsg({ text: errorText, key: Date.now() }); // new key every time, even if text is same
+  }, [errorText]);
+
+  // Start/refresh the 5s timer whenever the key changes
+  useEffect(() => {
+    if (!msg) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setMsg(null);
+      timerRef.current = null;
+    }, 5000);
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [msg?.key]);
+
+  // Clear message when modal closes
+  useEffect(() => {
+    if (!open && msg) setMsg(null);
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [open, msg]);
+
+  const changeAndClear = (k, v) => {
+  if (msg) setMsg(null);
+  setValues((prev) => ({ ...prev, [k]: v }));
+};
+  // ---------------------------------------------------------------------------
+
+  // reset plan when app changes
   useEffect(() => {
     setValues((prev) => ({ ...prev, Task_plan: "" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -24,11 +76,11 @@ export default function CreateTaskModal({
 
   const appOptions = apps.map((a) => a.App_Acronym);
 
-  // Only show plans whose Plan_app_Acronym matches the selected application
   const planOptions = useMemo(
-    () => (values.Task_app_Acronym
-      ? (plans || []).filter(p => p.Plan_app_Acronym === values.Task_app_Acronym)
-      : []),
+    () =>
+      values.Task_app_Acronym
+        ? (plans || []).filter((p) => p.Plan_app_Acronym === values.Task_app_Acronym)
+        : [],
     [plans, values.Task_app_Acronym]
   );
 
@@ -37,7 +89,7 @@ export default function CreateTaskModal({
     const x = new Date(d);
     if (Number.isNaN(+x)) return String(d);
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`; // e.g., 27 Oct 2025
+    return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`;
   };
 
   const disabled =
@@ -58,22 +110,20 @@ export default function CreateTaskModal({
             X
           </button>
         </div>
-        {/* Two-column layout */}
+
+
         <div className="grid grid-cols-1 gap-6">
-          {/* LEFT: core fields */}
           <div className="space-y-3">
             <label className="block">
               <div className="text-sm mb-1">Application</div>
               <select
                 className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                 value={values.Task_app_Acronym}
-                onChange={(e) => change("Task_app_Acronym", e.target.value)}
+                onChange={(e) => changeAndClear("Task_app_Acronym", e.target.value)}
               >
                 <option value="">Select an application…</option>
                 {appOptions.map((acr) => (
-                  <option key={acr} value={acr}>
-                    {acr}
-                  </option>
+                  <option key={acr} value={acr}>{acr}</option>
                 ))}
               </select>
             </label>
@@ -83,7 +133,7 @@ export default function CreateTaskModal({
               <input
                 className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                 value={values.Task_name}
-                onChange={(e) => change("Task_name", e.target.value)}
+                onChange={(e) => changeAndClear("Task_name", e.target.value)}
                 autoComplete="off"
               />
             </label>
@@ -94,7 +144,7 @@ export default function CreateTaskModal({
                 className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                 rows={4}
                 value={values.Task_description}
-                onChange={(e) => change("Task_description", e.target.value)}
+                onChange={(e) => changeAndClear("Task_description", e.target.value)}
               />
             </label>
 
@@ -103,7 +153,7 @@ export default function CreateTaskModal({
               <select
                 className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none bg-white focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
                 value={values.Task_plan || ""}
-                onChange={(e) => setValues(prev => ({ ...prev, Task_plan: e.target.value }))}
+                onChange={(e) => setValues((prev) => ({ ...prev, Task_plan: e.target.value }))}
               >
                 <option value="">— No plan —</option>
                 {planOptions.map((p) => {
@@ -113,53 +163,21 @@ export default function CreateTaskModal({
                       : "";
                   return (
                     <option key={p.Plan_MVP_name} value={p.Plan_MVP_name}>
-                      {p.Plan_MVP_name}
-                      {range}
+                      {p.Plan_MVP_name}{range}
                     </option>
                   );
                 })}
               </select>
             </label>
-
           </div>
-
-          {/* RIGHT: Notes list + Entry */}
-          {/* <div className="space-y-3">
-            <div>
-              <div className="text-sm mb-1">Notes</div>
-              <div className="min-h-[120px] rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm">
-                {existingNotes.length === 0 ? (
-                  <span className="italic text-gray-500">No entries.</span>
-                ) : (
-                  <ul className="list-disc pl-5 space-y-1">
-                    {existingNotes.map((n, i) => (
-                      <li key={i}>{n}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <label className="block">
-              <div className="text-sm mb-1">Entry</div>
-              <textarea
-                className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-indigo-400 focus:ring focus:ring-indigo-200/50"
-                rows={4}
-                placeholder="Insert Entry Here…"
-                value={values.Task_notes || ""}
-                onChange={(e) => change("Task_notes", e.target.value)}
-              />
-            </label>
-          </div> */}
         </div>
-
-        {error && (
-          <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">
-            {error}
+        {/* Error banner with timeout */}
+        {msg?.text && (
+          <div className="mt-4 mb-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">
+            {msg.text}
           </div>
         )}
-
-        <div className="mt-5 flex items-center gap-3">
+        <div className="mt-2 flex items-center gap-3">
           <button
             onClick={onSubmit}
             disabled={disabled}
@@ -168,7 +186,6 @@ export default function CreateTaskModal({
           >
             Create Task
           </button>
-
         </div>
       </div>
     </div>
