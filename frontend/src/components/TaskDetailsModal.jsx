@@ -4,22 +4,12 @@ import React, { useMemo, useState, useEffect } from "react";
 // Keep in sync with backend NOTE_SEP
 const NOTE_SEP = "\n--- NOTE ENTRY ---\n";
 
-// 27 Oct 2025
-const fmtDMY = (v) => {
+const fmt = (v) => {
   if (!v) return "";
   const d = v instanceof Date ? v : new Date(String(v).replace(/T.*$/, ""));
   if (Number.isNaN(+d)) return String(v);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-};
-
-// 27 Oct 2025 for plan dates
-const fmt = (d) => {
-  if (!d) return "—";
-  const x = new Date(d);
-  if (Number.isNaN(+x)) return String(d);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`;
 };
 
 function parseNotes(text) {
@@ -69,8 +59,8 @@ export default function TaskDetailsModal({
   open,
   task,
   onClose,
-  onAppendNote,          // async (text) => void
-  planOptions = [],      // [{ Plan_MVP_name, Plan_app_Acronym, Plan_startDate, Plan_endDate }, ...]
+  onAppendNote,          
+  planOptions = [],      
   canOpenActions = false,
   canToDoActions = false,
   canDoingActions = false,
@@ -84,7 +74,7 @@ export default function TaskDetailsModal({
   onReject,
 }) {
   const [entry, setEntry] = useState("");
-  const [busyAction, setBusyAction] = useState(null); // 'release' | 'take' | 'note' | null
+  const [busyAction, setBusyAction] = useState(null);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -196,7 +186,7 @@ export default function TaskDetailsModal({
             <div className="mt-6 space-y-1">
               <Row label="Owner:" value={task.Task_owner} />
               <Row label="Creator:" value={task.Task_creator} />
-              <Row label="Created On:" value={fmtDMY(task.Task_createDate)} />
+              <Row label="Created On:" value={fmt(task.Task_createDate)} />
             </div>
 
 

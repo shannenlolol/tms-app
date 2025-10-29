@@ -7,7 +7,6 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pool from "../models/db.js";
 import { makeAccessToken, makeRefreshToken, setRefreshCookie } from "../middleware/jwt.js";
-import { checkGroup } from "./users.controller.js";
 
 // tiny helper: DB CSV/string -> array
 const toArray = (v) => String(v ?? "").split(",").map(s => s.trim()).filter(Boolean);

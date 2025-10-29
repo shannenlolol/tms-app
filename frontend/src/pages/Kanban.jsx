@@ -13,7 +13,7 @@ import CreatePlanModal from "../components/CreatePlanModal";
 const COLUMNS = ["Open", "To-Do", "Doing", "Done", "Closed"];
 const STATE_MAP = {
   Open: "Open",
-  "To-Do": "ToDo", // API uses ToDo
+  "To-Do": "ToDo", 
   Doing: "Doing",
   Done: "Done",
   Closed: "Closed",
@@ -24,6 +24,7 @@ const csvToList = (v) =>
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+    
 const lc = (s) => String(s ?? "").toLowerCase();
 
 function userGroupSet(user) {
@@ -32,11 +33,9 @@ function userGroupSet(user) {
   return new Set(arr.map(lc));
 }
 function getCreatePermitGroups(app) {
-  const v = app?.Permit_Create ?? app?.App_permit_Create ?? "";
+  const v = app?.Permit_Create ?? "";
   return Array.isArray(v) ? v : csvToList(v);
 }
-
-
 
 const fmt = (d) => {
   if (!d) return "—";
@@ -201,11 +200,10 @@ export default function Kanban() {
 
     // Find the application to read permits
     const app = (apps || []).find((a) => a.App_Acronym === t.Task_app_Acronym);
-    const permitOpenCSV = app?.App_permit_Open ?? app?.Permit_Open ?? "";
-    const permitToDoCSV =
-      app?.App_permit_toDoList ?? app?.Permit_ToDo ?? "";
-    const permitDoingCSV = app?.App_permit_Doing ?? app?.Permit_Doing ?? "";
-    const permitDoneCSV = app?.App_permit_Done ?? app?.Permit_Done ?? "";
+    const permitOpenCSV = app?.Permit_Open ?? "";
+    const permitToDoCSV = app?.Permit_ToDo ?? "";
+    const permitDoingCSV = app?.Permit_Doing ?? "";
+    const permitDoneCSV = app?.Permit_Done ?? "";
 
     const openGroups = String(permitOpenCSV)
       .split(",")

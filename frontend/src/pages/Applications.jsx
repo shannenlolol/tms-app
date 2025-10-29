@@ -130,7 +130,7 @@ export default function Applications() {
       App_Description: "",
       App_startDate: "",
       App_endDate: "",
-      Permit_Create: [],   // NEW
+      Permit_Create: [],   
       Permit_Open: [],
       Permit_ToDo: [],
       Permit_Doing: [],
@@ -198,7 +198,7 @@ export default function Applications() {
         App_Description: newApp.App_Description,
         App_startDate: newApp.App_startDate,
         App_endDate: newApp.App_endDate,
-        Permit_Create: newApp.Permit_Create,   // NEW
+        Permit_Create: newApp.Permit_Create,   
         Permit_Open: newApp.Permit_Open,
         Permit_ToDo: newApp.Permit_ToDo,
         Permit_Doing: newApp.Permit_Doing,
@@ -221,10 +221,6 @@ export default function Applications() {
     }
   };
 
-  // const openKanban = (acronym) => {
-  //   navigate(`/applications/${encodeURIComponent(acronym)}/kanban`);
-  // };
-
   return (
     <div className="p-4">
       <p className="text-xl px-2 mb-6"><b>Applications</b></p>
@@ -232,17 +228,17 @@ export default function Applications() {
       <div className="relative shadow-md sm:rounded-lg overflow-visible lg:overflow-visible">
         <table className="table-fixed w-full text-sm text-left text-gray-700 dark:text-gray-300">
           <colgroup>
-            <col className="w-16" />   {/* Acronym */}
-            <col className="w-28" />   {/* Description */}
-            <col className="w-22" />   {/* Start Date */}
-            <col className="w-22" />   {/* End Date */}
-            <col className="w-26" />   {/* Create */}
-            <col className="w-26" />   {/* Open */}
-            <col className="w-26" />   {/* To Do */}
-            <col className="w-26" />   {/* Doing */}
-            <col className="w-26" />   {/* Done */}
-            <col className="w-12" />   {/* Tasks */}
-            <col className="w-12" />   {/* Action btn */}
+            <col className="w-16" />   
+            <col className="w-28" />   
+            <col className="w-22" />  
+            <col className="w-22" />  
+            <col className="w-26" />  
+            <col className="w-26" />  
+            <col className="w-26" /> 
+            <col className="w-26" />  
+            <col className="w-26" />  
+            <col className="w-12" /> 
+            <col className="w-12" /> 
           </colgroup>
           <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
             <tr>
@@ -250,7 +246,7 @@ export default function Applications() {
               <th className="px-2 py-3">Description</th>
               <th className="px-2 py-3">Start Date</th>
               <th className="px-2 py-3">End Date</th>
-              <th className="px-2 py-3">Create</th> {/* NEW */}
+              <th className="px-2 py-3">Create</th> 
               <th className="px-2 py-3">Open</th>
               <th className="px-2 py-3">To Do</th>
               <th className="px-2 py-3">Doing</th>

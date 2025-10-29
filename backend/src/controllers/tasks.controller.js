@@ -5,6 +5,7 @@ import { canUserCreateTaskForApp } from "../policy/taskPolicy.js";
 import { sendMail, getEmailsForGroups } from "../middleware/mailer.js";
 
 const NOTE_SEP = "\n--- NOTE ENTRY ---\n";
+const MAX_TASK_NAME = 50;
 
 function fmtTs(d = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -161,6 +162,9 @@ export async function createTask(req, res) {
     try { await conn.rollback(); } catch { }
     if (e?.code === "ER_DUP_ENTRY") {
       return res.status(409).json({ ok: false, message: "Task name already exists" });
+    }
+    if (e?.code === "ER_DATA_TOO_LONG" && /Task_name/i.test(e?.message || "")) {
+      return res.status(400).json({ ok: false, message: `Task Name must not be longer than ${MAX_TASK_NAME} characters.` });
     }
     return res.status(500).json({ ok: false, message: e.message });
   } finally {
@@ -359,7 +363,7 @@ export async function updateTask(req, res) {
     }
 
     await conn.commit();
-    
+
     // Fire-and-forget minimal email AFTER commit
     if (notifyAfterCommit) {
       (async () => {
@@ -390,7 +394,7 @@ export async function updateTask(req, res) {
     );
     res.json(rows[0]);
   } catch (e) {
-    try { await conn.rollback(); } catch {}
+    try { await conn.rollback(); } catch { }
     res.status(500).json({ ok: false, message: e.message || "Failed to update task" });
   } finally {
     conn.release();
