@@ -2,6 +2,7 @@
 import pool from "../models/db.js";
 import { canUserCreateTaskForApp } from "../policy/taskPolicy.js";
 // import { checkGroup } from "./users.controller.js";
+import { sendMail, getEmailsForGroups } from "../middleware/mailer.js";
 
 const NOTE_SEP = "\n--- NOTE ENTRY ---\n";
 
@@ -138,10 +139,10 @@ export async function createTask(req, res) {
         Task_state, Task_creator, Task_owner, Task_createDate, Task_id)
        VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, CURRENT_DATE, ?)`,
 
-      // 🔽 use initialNotes (includes "Task created" + optional initial note)
+      // use initialNotes (includes "Task created" + optional initial note)
       [name, Task_description || null, initialNotes, plan, acr, username, Task_owner || null, taskId]
     );
-
+    console.log("JNDJKASNDJ")
     await conn.commit();
 
     res.status(201).json({
@@ -208,7 +209,7 @@ export async function updateTask(req, res) {
     const { Task_plan, Task_state, note } = req.body || {};
 
     // detect which fields are actually present (not just undefined)
-    const planSupplied  = Object.prototype.hasOwnProperty.call(req.body, "Task_plan");
+    const planSupplied = Object.prototype.hasOwnProperty.call(req.body, "Task_plan");
     const stateSupplied = Object.prototype.hasOwnProperty.call(req.body, "Task_state");
 
     if (!planSupplied && !stateSupplied && !note) {
@@ -275,7 +276,7 @@ export async function updateTask(req, res) {
 
     // ---- State transitions ----
     // Open/Doing -> ToDo (Release)
-    if (Task_state === "ToDo"  && t.Task_state === "Open") {
+    if (Task_state === "ToDo" && t.Task_state === "Open") {
       // require a plan before release
       const hasPlan = t.Task_plan != null && String(t.Task_plan).trim() !== "";
       if (!hasPlan) {
@@ -308,14 +309,32 @@ export async function updateTask(req, res) {
       await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task taken by ${username}; state ToDo → Doing`), taskName]);
     }
 
-
-
     // Doing -> Done (Review)
     if (Task_state === "Done" && t.Task_state === "Doing") {
-      if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to review this task" }); }
-      await conn.query("UPDATE task SET Task_state='Done' WHERE Task_name=?", [taskName]);
-      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task reviewed; state Doing → Done`), taskName]);
+      if (!(await userInAny(permitToDo))) {
+        await conn.rollback();
+        return res.status(403).json({ ok: false, message: "Not permitted to review this task" });
+      }
+
+      await conn.query(
+        "UPDATE task SET Task_state='Done' WHERE Task_name=?",
+        [taskName]
+      );
+
+      await conn.query(
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
+        [makeNoteEntry(username, "Task reviewed; state Doing → Done"), taskName]
+      );
+
+      // Capture email intent and minimal payload for after-commit send
+      var notifyAfterCommit = {
+        appAcronym: t.Task_app_Acronym,
+        taskName,
+        reviewer: username,
+        permitDoneGroups: permitDone
+      };
     }
+
 
     // Done -> Closed (Approve)
     if (Task_state === "Closed" && t.Task_state === "Done") {
@@ -340,6 +359,28 @@ export async function updateTask(req, res) {
     }
 
     await conn.commit();
+    
+    // Fire-and-forget minimal email AFTER commit
+    if (notifyAfterCommit) {
+      (async () => {
+        try {
+          const emails = await getEmailsForGroups(notifyAfterCommit.permitDoneGroups);
+          if (emails.length === 0) {
+            return;
+          }
+
+          const subject = `[${notifyAfterCommit.appAcronym}] Task moved to Done: ${notifyAfterCommit.taskName}`;
+          const text =
+            `Task "${notifyAfterCommit.taskName}" in app "${notifyAfterCommit.appAcronym}" ` +
+            `was promoted to Done by ${notifyAfterCommit.reviewer}. ` +
+            `Please review for completeness.`;
+
+          await sendMail(emails.join(","), subject, text);
+        } catch (e) {
+          console.error("Done-review email failed:", e?.message || e);
+        }
+      })();
+    }
 
     const [rows] = await pool.query(
       `SELECT Task_name, Task_description, Task_notes, Task_plan, Task_app_Acronym,

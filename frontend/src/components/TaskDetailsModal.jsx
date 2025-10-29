@@ -278,7 +278,7 @@ export default function TaskDetailsModal({
                   disabled={disableAll}
                   className={`btn-green mt-6 mr-4 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-emerald-300 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"}`}
                 >
-                  {busyAction === "review" ? "Reviewing…" : "Review Task"}
+                  {busyAction === "review" ? "Requesting…" : "Request Task Review"}
                 </button>
                 <button
                   type="button"
