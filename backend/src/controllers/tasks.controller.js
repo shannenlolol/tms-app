@@ -295,7 +295,7 @@ export async function updateTask(req, res) {
       await conn.query("UPDATE task SET Task_state = 'ToDo' WHERE Task_name = ?", [taskName]);
       await conn.query(
         "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, `Task moved from "Open" to "ToDo"`), taskName]
+        [makeNoteEntry(username, `Task released: Open → ToDo`), taskName]
       );
     }
 
@@ -303,14 +303,14 @@ export async function updateTask(req, res) {
     if (Task_state === "ToDo" && t.Task_state === "Doing") {
       if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to drop this task" }); }
       await conn.query("UPDATE task SET Task_state='ToDo', Task_owner=NULL WHERE Task_name=?", [taskName]);
-      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task dropped; state Doing → ToDo`), taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task dropped: Doing → ToDo`), taskName]);
     }
 
     // ToDo -> Doing (Take)
     if (Task_state === "Doing" && t.Task_state === "ToDo") {
       if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to take this task" }); }
       await conn.query("UPDATE task SET Task_state='Doing', Task_owner=? WHERE Task_name=?", [username, taskName]);
-      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task taken by ${username}; state ToDo → Doing`), taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task taken: ToDo → Doing`), taskName]);
     }
 
     // Doing -> Done (Review)
@@ -327,7 +327,7 @@ export async function updateTask(req, res) {
 
       await conn.query(
         "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, "Task reviewed; state Doing → Done"), taskName]
+        [makeNoteEntry(username, "Task reviewed: Doing → Done"), taskName]
       );
 
       // Capture email intent and minimal payload for after-commit send
@@ -344,14 +344,14 @@ export async function updateTask(req, res) {
     if (Task_state === "Closed" && t.Task_state === "Done") {
       if (!(await userInAny(permitDone))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to approve this task" }); }
       await conn.query("UPDATE task SET Task_state='Closed' WHERE Task_name=?", [taskName]);
-      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task approved; state Done → Closed`), taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task approved: Done → Closed`), taskName]);
     }
 
     // Done -> Doing (Reject)
     if (Task_state === "Doing" && t.Task_state === "Done") {
       if (!(await userInAny(permitDone))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to reject this task" }); }
       await conn.query("UPDATE task SET Task_state='Doing' WHERE Task_name=?", [taskName]);
-      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task rejected; state Done → Doing`), taskName]);
+      await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task rejected: Done → Doing`), taskName]);
     }
 
     // Optional free-form note (keep behaviour)
@@ -373,11 +373,11 @@ export async function updateTask(req, res) {
             return;
           }
 
-          const subject = `[${notifyAfterCommit.appAcronym}] Task moved to Done: ${notifyAfterCommit.taskName}`;
+          const subject = `[${notifyAfterCommit.appAcronym}] Task ready for Review: ${notifyAfterCommit.taskName}`;
           const text =
-            `Task "${notifyAfterCommit.taskName}" in app "${notifyAfterCommit.appAcronym}" ` +
+            `Task "${notifyAfterCommit.taskName}" in Application "${notifyAfterCommit.appAcronym}" ` +
             `was promoted to Done by ${notifyAfterCommit.reviewer}. ` +
-            `Please review for completeness.`;
+            `Please review the task.`;
 
           await sendMail(emails.join(","), subject, text);
         } catch (e) {

@@ -4,12 +4,12 @@ import React, { useMemo, useState, useEffect } from "react";
 // Keep in sync with backend NOTE_SEP
 const NOTE_SEP = "\n--- NOTE ENTRY ---\n";
 
-const fmt = (v) => {
-  if (!v) return "";
-  const d = v instanceof Date ? v : new Date(String(v).replace(/T.*$/, ""));
-  if (Number.isNaN(+d)) return String(v);
+const fmt = (d) => {
+  if (!d) return "—";
+  const x = new Date(d);
+  if (Number.isNaN(+x)) return String(d);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`;
 };
 
 function parseNotes(text) {
@@ -59,8 +59,8 @@ export default function TaskDetailsModal({
   open,
   task,
   onClose,
-  onAppendNote,          
-  planOptions = [],      
+  onAppendNote,
+  planOptions = [],
   canOpenActions = false,
   canToDoActions = false,
   canDoingActions = false,
@@ -105,37 +105,40 @@ export default function TaskDetailsModal({
     }
   };
 
-  // Release (no auto-note append now), then close modal
-  const handleReleaseClick = async () => {
+  const hasPlan = (t) => !!(t?.Task_plan && String(t.Task_plan).trim() !== "");
+
+  async function runAction(label, fn, { requirePlan = false } = {}) {
     if (busyAction) return;
-    // client-side precheck to match new backend rule
-    if (!task.Task_plan || String(task.Task_plan).trim() === "") {
-      setMsg("Please select a plan before releasing this task.");
+    if (requirePlan && !hasPlan(task)) {
+      console.log("Jfnijasn")
+      setMsg(`Please select a plan before ${label} this task.`);
       return;
     }
     try {
-      setBusyAction("release");
-      await onRelease?.();
+      setBusyAction(label);
+      await fn?.();
       onClose?.();
-    }
-    catch (e) {
+    } catch (e) {
       setMsg(extractErr(e));
     } finally {
       setBusyAction(null);
     }
-  };
+  }
+
+  // handlers
+  const handleApproveClick = () =>
+    runAction("approving", onApprove, { requirePlan: true });
+
+  const handleRejectClick = () =>
+    runAction("rejecting", onReject, { requirePlan: true }); // set to false if reject shouldn't require a plan
+
+  const handleReleaseClick = () =>
+    runAction("releasing", onRelease, { requirePlan: true });
 
   // Take, then close modal
-  const handleTakeClick = async () => {
-    if (busyAction) return;
-    try {
-      setBusyAction("take");
-      await onTake?.();
-      onClose?.();
-    } finally {
-      setBusyAction(null);
-    }
-  };
+  const handleTakeClick = () =>
+    runAction("taking", onTake, { requirePlan: false });
+
   // tiny helper to pull a readable error message
   function extractErr(err) {
     const d = err?.response?.data;
@@ -310,19 +313,29 @@ export default function TaskDetailsModal({
                     })}
 
                 </select>
+                {msg && (
+                  <div
+                    className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                    role="alert" aria-live="polite"
+                  >
+                    {msg}
+                  </div>
+                )}
                 <button
                   type="button"
-                  onClick={async () => { if (busyAction) return; setBusyAction("approve"); await onApprove?.(); onClose?.(); setBusyAction(null); }}
+                  onClick={handleApproveClick}
                   disabled={disableAll}
-                  className={`btn-green mt-6 mr-4 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-slate-300 cursor-not-allowed" : "bg-slate-700 hover:bg-slate-800"}`}
+                  className={`btn-green mt-6 mr-4 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-slate-300 cursor-not-allowed" : "bg-slate-700 hover:bg-slate-800"
+                    }`}
                 >
                   {busyAction === "approve" ? "Approving…" : "Approve Task"}
                 </button>
                 <button
                   type="button"
-                  onClick={async () => { if (busyAction) return; setBusyAction("reject"); await onReject?.(); onClose?.(); setBusyAction(null); }}
+                  onClick={handleRejectClick}
                   disabled={disableAll}
-                  className={`btn-red rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-rose-300 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"}`}
+                  className={`btn-red rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-rose-300 cursor-not-allowed" : "bg-rose-600 hover:bg-rose-700"
+                    }`}
                 >
                   {busyAction === "reject" ? "Rejecting…" : "Reject Task"}
                 </button>

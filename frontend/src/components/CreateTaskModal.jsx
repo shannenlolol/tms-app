@@ -17,8 +17,6 @@ export default function CreateTaskModal({ ...props }) {
 
   if (!open) return null;
 
-  const change = (k, v) => setValues((prev) => ({ ...prev, [k]: v }));
-
   // -------------------- Error banner with timeout (robust) --------------------
   const [msg, setMsg] = useState(null); // { text: string, key: number } | null
   const timerRef = useRef(null);

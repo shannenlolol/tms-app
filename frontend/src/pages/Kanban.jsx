@@ -1,6 +1,5 @@
 // src/pages/Kanban.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getApplications } from "../api/applications";
 import { getTasks, createTask, appendTaskNote, updateTask } from "../api/tasks";
@@ -24,7 +23,7 @@ const csvToList = (v) =>
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-    
+
 const lc = (s) => String(s ?? "").toLowerCase();
 
 function userGroupSet(user) {
@@ -47,7 +46,6 @@ const fmt = (d) => {
 
 export default function Kanban() {
   const { ready, isAuthenticated, user } = useAuth();
-  const navigate = useNavigate();
 
   // ======== state (INSIDE component) ========
   const [apps, setApps] = useState([]);
@@ -347,6 +345,7 @@ export default function Kanban() {
     setErr("");
     setValues((v) => ({
       ...v,
+      Task_app_Acronym: "",
       Task_name: "",
       Task_description: "",
       Task_plan: "",
