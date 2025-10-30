@@ -149,7 +149,7 @@ export async function createTask(req, res) {
     res.status(201).json({
       Task_name: name,
       Task_description: Task_description || null,
-      Task_notes: initialNotes,            
+      Task_notes: initialNotes,
       Task_plan: plan,
       Task_app_Acronym: acr,
       Task_state: "Open",
@@ -223,10 +223,11 @@ export async function updateTask(req, res) {
     await conn.beginTransaction();
 
     const [[t]] = await conn.query(
-      "SELECT Task_name, Task_state, Task_plan, Task_app_Acronym, Task_notes FROM task WHERE Task_name = ? LIMIT 1",
+      "SELECT Task_name, Task_state, Task_plan, Task_app_Acronym, Task_notes FROM task WHERE Task_name = ? FOR UPDATE",
       [taskName]
     );
     if (!t) { await conn.rollback(); return res.status(404).json({ ok: false, message: "Task not found" }); }
+    let didStateChange = false;
 
     const [[a]] = await conn.query(
       `SELECT App_Acronym, App_permit_Open, App_permit_toDoList, App_permit_Done
@@ -292,7 +293,16 @@ export async function updateTask(req, res) {
         return res.status(403).json({ ok: false, message: "Not permitted to release this task" });
       }
 
-      await conn.query("UPDATE task SET Task_state = 'ToDo' WHERE Task_name = ?", [taskName]);
+      const [r] = await conn.query(
+        "UPDATE task SET Task_state='ToDo' WHERE Task_name=? AND Task_state='Open'",
+        [taskName]
+      );
+      if (r.affectedRows === 0) {
+        await conn.rollback();
+        return res.status(409).json({ ok: false, message: "Task is no longer Open; please refresh" });
+      }
+      didStateChange = true;
+
       await conn.query(
         "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
         [makeNoteEntry(username, `Task released: Open → ToDo`), taskName]
@@ -302,14 +312,32 @@ export async function updateTask(req, res) {
     // Doing -> ToDo (Drop)
     if (Task_state === "ToDo" && t.Task_state === "Doing") {
       if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to drop this task" }); }
-      await conn.query("UPDATE task SET Task_state='ToDo', Task_owner=NULL WHERE Task_name=?", [taskName]);
+      const [r] = await conn.query(
+        "UPDATE task SET Task_state='ToDo', Task_owner=NULL WHERE Task_name=? AND Task_state='Doing'",
+        [taskName]
+      );
+      if (r.affectedRows === 0) {
+        await conn.rollback();
+        return res.status(409).json({ ok: false, message: "Task is no longer in Doing; please refresh" });
+      }
+      didStateChange = true;
+
       await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task dropped: Doing → ToDo`), taskName]);
     }
 
     // ToDo -> Doing (Take)
     if (Task_state === "Doing" && t.Task_state === "ToDo") {
       if (!(await userInAny(permitToDo))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to take this task" }); }
-      await conn.query("UPDATE task SET Task_state='Doing', Task_owner=? WHERE Task_name=?", [username, taskName]);
+      const [r] = await conn.query(
+        "UPDATE task SET Task_state='Doing', Task_owner=? WHERE Task_name=? AND Task_state='ToDo'",
+        [username, taskName]
+      );
+      if (r.affectedRows === 0) {
+        await conn.rollback();
+        return res.status(409).json({ ok: false, message: "Task is no longer in ToDo; please refresh" });
+      }
+      didStateChange = true;
+
       await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task taken: ToDo → Doing`), taskName]);
     }
 
@@ -320,10 +348,15 @@ export async function updateTask(req, res) {
         return res.status(403).json({ ok: false, message: "Not permitted to review this task" });
       }
 
-      await conn.query(
-        "UPDATE task SET Task_state='Done' WHERE Task_name=?",
+      const [r] = await conn.query(
+        "UPDATE task SET Task_state='Done' WHERE Task_name=? AND Task_state='Doing'",
         [taskName]
       );
+      if (r.affectedRows === 0) {
+        await conn.rollback();
+        return res.status(409).json({ ok: false, message: "Task state has changed; please refresh" });
+      }
+      didStateChange = true;
 
       await conn.query(
         "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
@@ -343,14 +376,32 @@ export async function updateTask(req, res) {
     // Done -> Closed (Approve)
     if (Task_state === "Closed" && t.Task_state === "Done") {
       if (!(await userInAny(permitDone))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to approve this task" }); }
-      await conn.query("UPDATE task SET Task_state='Closed' WHERE Task_name=?", [taskName]);
+      const [r] = await conn.query(
+        "UPDATE task SET Task_state='Closed' WHERE Task_name=? AND Task_state='Done'",
+        [taskName]
+      );
+      if (r.affectedRows === 0) {
+        await conn.rollback();
+        return res.status(409).json({ ok: false, message: "Task is no longer in Done; please refresh" });
+      }
+      didStateChange = true;
+
       await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task approved: Done → Closed`), taskName]);
     }
 
     // Done -> Doing (Reject)
     if (Task_state === "Doing" && t.Task_state === "Done") {
       if (!(await userInAny(permitDone))) { await conn.rollback(); return res.status(403).json({ ok: false, message: "Not permitted to reject this task" }); }
-      await conn.query("UPDATE task SET Task_state='Doing' WHERE Task_name=?", [taskName]);
+      const [r] = await conn.query(
+        "UPDATE task SET Task_state='Doing' WHERE Task_name=? AND Task_state='Done'",
+        [taskName]
+      );
+      if (r.affectedRows === 0) {
+        await conn.rollback();
+        return res.status(409).json({ ok: false, message: "Task is no longer in Done; please refresh" });
+      }
+      didStateChange = true;
+
       await conn.query("UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?", [makeNoteEntry(username, `Task rejected: Done → Doing`), taskName]);
     }
 
@@ -361,7 +412,11 @@ export async function updateTask(req, res) {
         [makeNoteEntry(username, String(note)), taskName]
       );
     }
-
+    // If client requested a state change but none of the guarded transitions fired, report conflict
+    if (stateSupplied && !didStateChange) {
+      await conn.rollback();
+      return res.status(409).json({ ok: false, message: "Task state changed by someone else; please refresh" });
+    }
     await conn.commit();
 
     // Fire-and-forget minimal email AFTER commit
@@ -477,7 +532,7 @@ export async function promoteTaskToDone(req, res) {
 
     // Load task & app permits
     const [[t]] = await conn.query(
-      "SELECT Task_name, Task_state, Task_plan, Task_app_Acronym, Task_notes FROM task WHERE Task_name = ? LIMIT 1",
+      "SELECT Task_name, Task_state, Task_plan, Task_app_Acronym, Task_notes FROM task WHERE Task_name = ? FOR UPDATE",
       [taskName]
     );
     if (!t) { await conn.rollback(); return res.status(404).json({ ok: false, message: "Task not found" }); }
@@ -545,7 +600,7 @@ export async function promoteTaskToDone(req, res) {
     );
     res.json(rows[0]);
   } catch (e) {
-    try { await conn.rollback(); } catch {}
+    try { await conn.rollback(); } catch { }
     res.status(500).json({ ok: false, message: e?.message || "Failed to promote task to Done" });
   } finally {
     conn.release();

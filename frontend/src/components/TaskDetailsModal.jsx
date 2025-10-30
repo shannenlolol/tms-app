@@ -44,9 +44,10 @@ const Row = ({ label, value }) => (
     <div className="flex-1">{value || <span className="text-gray-400">—</span>}</div>
   </div>
 );
+
 const planLabel = (planName, options) => {
   if (!planName) return "";
-  const meta = (options || []).find(p => p.Plan_MVP_name === planName);
+  const meta = (options || []).find((p) => p.Plan_MVP_name === planName);
   if (!meta) return planName;
   const range =
     meta.Plan_startDate || meta.Plan_endDate
@@ -107,10 +108,18 @@ export default function TaskDetailsModal({
 
   const hasPlan = (t) => !!(t?.Task_plan && String(t.Task_plan).trim() !== "");
 
+  // tiny helper to pull a readable error message
+  function extractErr(err) {
+    const status = err?.response?.status;
+    const d = err?.response?.data;
+    if (status === 409) return "Task state changed by someone else; please refresh.";
+    return d?.message || d?.error || err?.message || "Something went wrong.";
+  }
+
   async function runAction(label, fn, { requirePlan = false } = {}) {
     if (busyAction) return;
     // if (requirePlan && !hasPlan(task)) {
-    //   setMsg(`Please select a plan before ${label} this task.`);
+    //   setMsg("Please select a plan first.");
     //   return;
     // }
     try {
@@ -124,30 +133,14 @@ export default function TaskDetailsModal({
     }
   }
 
-  // handlers
-  const handleApproveClick = () =>
-    runAction("approving", onApprove, { requirePlan: true });
+  // handlers (use runAction everywhere so errors surface and modal stays open)
+  const handleApproveClick = () => runAction("approve", onApprove, { requirePlan: true });
+  const handleRejectClick = () => runAction("reject", onReject, { requirePlan: true });
+  const handleReleaseClick = () => runAction("release", onRelease, { requirePlan: true });
+  const handleTakeClick = () => runAction("take", onTake, { requirePlan: false });
+  const handleReviewClick = () => runAction("review", onReview);
+  const handleDropClick = () => runAction("drop", onDrop);
 
-  const handleRejectClick = () =>
-    runAction("rejecting", onReject, { requirePlan: true }); // set to false if reject shouldn't require a plan
-
-  const handleReleaseClick = () =>
-    runAction("releasing", onRelease, { requirePlan: true });
-
-  // Take, then close modal
-  const handleTakeClick = () =>
-    runAction("taking", onTake, { requirePlan: false });
-
-  // tiny helper to pull a readable error message
-  function extractErr(err) {
-    const d = err?.response?.data;
-    return (
-      d?.message ||
-      d?.error ||
-      err?.message ||
-      "Something went wrong while releasing the task"
-    );
-  }
   const disableAll = !!busyAction;
 
   return (
@@ -191,7 +184,6 @@ export default function TaskDetailsModal({
               <Row label="Created On:" value={fmt(task.Task_createDate)} />
             </div>
 
-
             {/* Show plan for states other than open/done */}
             {!(task.Task_state === "Open" && canOpenActions) && !(task.Task_state === "Done" && canDoneActions) && (
               <div className="mt-6">
@@ -214,26 +206,28 @@ export default function TaskDetailsModal({
                 >
                   <option value="">— No plan —</option>
                   {(planOptions || [])
-                    .filter(p => p.Plan_app_Acronym === task.Task_app_Acronym)  // 👈 filter to this task’s app
+                    .filter((p) => p.Plan_app_Acronym === task.Task_app_Acronym)
                     .map((p) => {
                       const range =
-                        p.Plan_startDate || p.Plan_endDate
-                          ? ` (${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)})`
-                          : "";
+                        p.Plan_startDate || p.Plan_endDate ? ` (${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)})` : "";
                       return (
                         <option key={p.Plan_MVP_name} value={p.Plan_MVP_name}>
-                          {p.Plan_MVP_name}{range}
+                          {p.Plan_MVP_name}
+                          {range}
                         </option>
                       );
                     })}
-
                 </select>
+                {/* error banner */}
                 {msg && (
-                  <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  <div
+                    className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                    role="alert"
+                    aria-live="polite"
+                  >
                     {msg}
                   </div>
                 )}
-
                 <button
                   type="button"
                   onClick={handleReleaseClick}
@@ -249,6 +243,16 @@ export default function TaskDetailsModal({
             {/* ACTIONS (ToDo) */}
             {task.Task_state === "ToDo" && canToDoActions && (
               <div className="mt-6">
+                {/* error banner */}
+                {msg && (
+                  <div
+                    className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    {msg}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={handleTakeClick}
@@ -263,30 +267,41 @@ export default function TaskDetailsModal({
 
             {/* ACTIONS (Doing) */}
             {task.Task_state === "Doing" && canDoingActions && (
+
               <div className="mt-6">
+                {/* error banner */}
+                {msg && (
+                  <div
+                    className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    {msg}
+                  </div>
+                )}
                 <button
                   type="button"
-                  onClick={async () => { if (busyAction) return; setBusyAction("review"); await onReview?.(); onClose?.(); setBusyAction(null); }}
+                  onClick={handleReviewClick}
                   disabled={disableAll}
-                  className={`btn-green mt-6 mr-4 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-emerald-300 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                  className={`btn-green mt-6 mr-4 rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-emerald-300 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
                 >
                   {busyAction === "review" ? "Requesting…" : "Request Task Review"}
                 </button>
                 <button
                   type="button"
-                  onClick={async () => { if (busyAction) return; setBusyAction("drop"); await onDrop?.(); onClose?.(); setBusyAction(null); }}
+                  onClick={handleDropClick}
                   disabled={disableAll}
-                  className={`btn-red rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-amber-300 cursor-not-allowed" : "bg-amber-600 hover:bg-amber-700"}`}
+                  className={`btn-red rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-amber-300 cursor-not-allowed" : "bg-amber-600 hover:bg-amber-700"
+                    }`}
                 >
                   {busyAction === "drop" ? "Dropping…" : "Drop Task"}
                 </button>
-
               </div>
             )}
 
             {/* ACTIONS (Done) */}
             {task.Task_state === "Done" && canDoneActions && (
-
               <div className="mt-6">
                 <div className="text-sm text-gray-600">Plan:</div>
 
@@ -298,24 +313,25 @@ export default function TaskDetailsModal({
                 >
                   <option value="">— No plan —</option>
                   {(planOptions || [])
-                    .filter(p => p.Plan_app_Acronym === task.Task_app_Acronym)  // 👈 filter to this task’s app
+                    .filter((p) => p.Plan_app_Acronym === task.Task_app_Acronym)
                     .map((p) => {
                       const range =
-                        p.Plan_startDate || p.Plan_endDate
-                          ? ` (${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)})`
-                          : "";
+                        p.Plan_startDate || p.Plan_endDate ? ` (${fmt(p.Plan_startDate)} - ${fmt(p.Plan_endDate)})` : "";
                       return (
                         <option key={p.Plan_MVP_name} value={p.Plan_MVP_name}>
-                          {p.Plan_MVP_name}{range}
+                          {p.Plan_MVP_name}
+                          {range}
                         </option>
                       );
                     })}
-
                 </select>
+
+                {/* error banner */}
                 {msg && (
                   <div
-                    className="mt-6 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
-                    role="alert" aria-live="polite"
+                    className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                    role="alert"
+                    aria-live="polite"
                   >
                     {msg}
                   </div>
@@ -340,8 +356,6 @@ export default function TaskDetailsModal({
                 </button>
               </div>
             )}
-
-
           </div>
 
           {/* RIGHT: Notes + (conditional) Entry */}
@@ -381,9 +395,7 @@ export default function TaskDetailsModal({
                     type="button"
                     onClick={handleAddNoteClick}
                     disabled={disableAll || !entry.trim()}
-                    className={`rounded-md px-3 py-1.5 text-white ${disableAll || !entry.trim()
-                      ? "bg-gray-300 cursor-not-allowed"
-                      : "bg-indigo-600 hover:bg-indigo-700"
+                    className={`rounded-md px-3 py-1.5 text-white ${disableAll || !entry.trim() ? "bg-gray-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
                       }`}
                   >
                     {busyAction === "note" ? "Adding…" : "Add Note"}
