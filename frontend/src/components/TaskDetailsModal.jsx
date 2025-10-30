@@ -101,6 +101,8 @@ export default function TaskDetailsModal({
       setBusyAction("note");
       await onAppendNote?.(entry.trim());
       setEntry("");
+    } catch (e) {
+      setMsg(extractErr(e));
     } finally {
       setBusyAction(null);
     }

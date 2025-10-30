@@ -11,8 +11,8 @@ export const getTasks = async (params) =>
 export const createTask = async (payload) =>
   (await http.post("/tasks", payload)).data;
 
-export const appendTaskNote = async (taskName, entry) =>
-  (await http.post(`/tasks/${encodeURIComponent(taskName)}/notes`, { entry })).data;
+export const appendTaskNote = async (taskName, entry, taskState) =>
+  (await http.post(`/tasks/${encodeURIComponent(taskName)}/notes`, { entry, taskState })).data;
 
 export const updateTask = async (taskName, payload) =>
   (await http.patch(`/tasks/${encodeURIComponent(taskName)}`, payload)).data;

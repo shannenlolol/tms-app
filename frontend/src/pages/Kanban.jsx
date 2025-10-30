@@ -503,7 +503,7 @@ export default function Kanban() {
         onClose={closeDetails}
         onAppendNote={async (text) => {
           if (!activeTask) return;
-          await appendTaskNote(activeTask.Task_name, text);
+          await appendTaskNote(activeTask.Task_name, text, activeTask.Task_state);
           await refreshAndSync(activeTask.Task_name);
         }}
         planOptions={activePlans}

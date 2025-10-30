@@ -46,6 +46,17 @@ async function isUserInGroup(username, groupName) {
   return groups.includes(gname);
 }
 
+function permitsForState(state, appRow) {
+  // Map current state -> which permit list is allowed to act
+  switch (state) {
+    case "Open": return csv(appRow.App_permit_Open);
+    case "ToDo": return csv(appRow.App_permit_toDoList);
+    case "Doing": return csv(appRow.App_permit_Doing);
+    case "Done": return csv(appRow.App_permit_Done);
+    default: return []; // Closed/unknown → no write permission
+  }
+}
+
 export async function listTasks(req, res) {
   try {
     const { app, state, plan } = req.query || {};
@@ -174,32 +185,73 @@ export async function createTask(req, res) {
 
 
 export async function appendTaskNote(req, res) {
+  const conn = await pool.getConnection();
   try {
     const username = String(req.user?.username || "").trim();
     if (!username) return res.status(401).json({ ok: false, message: "Unauthorised" });
-
     const taskName = String(req.params.taskName || "").trim();
     const entryRaw = String(req.body?.entry || "").trim();
+    const expectedState = String(req.body?.taskState || "").trim();
     if (!taskName || !entryRaw) return res.status(400).json({ ok: false, message: "Bad request" });
 
-    // fetch current state to stamp the status
-    const [[t]] = await pool.query(
-      "SELECT Task_state FROM task WHERE Task_name = ? LIMIT 1",
+    await conn.beginTransaction();
+
+    // Lock the task row while we check & write
+    const [[t]] = await conn.query(
+      "SELECT Task_state, Task_app_Acronym FROM task WHERE Task_name = ? FOR UPDATE",
       [taskName]
     );
-    if (!t) return res.status(404).json({ ok: false, message: "Task not found" });
+    if (!t) { await conn.rollback(); return res.status(404).json({ ok: false, message: "Task not found" }); }
 
+    // If the client provided an expectation, enforce it
+    if (expectedState && t.Task_state !== expectedState) {
+      await conn.rollback();
+      return res.status(409).json({
+        ok: false,
+        message: `Task state changed by someone else; it is now "${t.Task_state}". Please refresh.`,
+      });
+    }
+
+    // Load app permits once
+    const [[a]] = await conn.query(
+      `SELECT App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
+       FROM application WHERE App_Acronym = ? LIMIT 1`,
+      [t.Task_app_Acronym]
+    );
+    if (!a) { await conn.rollback(); return res.status(404).json({ ok: false, message: "Application not found" }); }
+
+    // Determine which permit set applies for the CURRENT task state
+    const groups = permitsForState(t.Task_state, a);
+    if (!groups.length) {
+      await conn.rollback();
+      return res.status(403).json({ ok: false, message: "Notes are not allowed in this state" });
+    }
+
+    // Check membership
+    const allowed = (await Promise.all(groups.map((g) => isUserInGroup(username, g)))).some(Boolean);
+    if (!allowed) {
+      await conn.rollback();
+      return res.status(403).json({ ok: false, message: "Not permitted to add a note in this state" });
+    }
+
+    // Append stamped note against the *current* state
     const entryBlock = makeNoteEntry(username, entryRaw, t.Task_state);
-    const [r] = await pool.query(
+    await conn.query(
       "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
       [entryBlock, taskName]
     );
-    if (!r.affectedRows) return res.status(404).json({ ok: false, message: "Task not found" });
+
+    await conn.commit();
     res.json({ ok: true });
-  } catch {
-    res.status(500).json({ ok: false, message: "Failed to append note" });
+  } catch (e) {
+    try { await conn.rollback(); } catch {}
+    res.status(500).json({ ok: false, message: e?.message || "Failed to append note" });
+  } finally {
+    conn.release();
   }
 }
+
+
 
 export async function updateTask(req, res) {
   const conn = await pool.getConnection();
@@ -230,7 +282,7 @@ export async function updateTask(req, res) {
     let didStateChange = false;
 
     const [[a]] = await conn.query(
-      `SELECT App_Acronym, App_permit_Open, App_permit_toDoList, App_permit_Done
+      `SELECT App_Acronym, App_permit_Open, App_permit_toDoList, App_permit_Doing, App_permit_Done
        FROM application WHERE App_Acronym = ? LIMIT 1`,
       [t.Task_app_Acronym]
     );
@@ -238,6 +290,7 @@ export async function updateTask(req, res) {
 
     const permitOpen = csv(a.App_permit_Open);
     const permitToDo = csv(a.App_permit_toDoList);
+    const permitDoing = csv(a.App_permit_Doing)
     const permitDone = csv(a.App_permit_Done);
 
     const userInAny = async (groups) => {
@@ -280,7 +333,7 @@ export async function updateTask(req, res) {
     }
 
     // ---- State transitions ----
-    // Open/Doing -> ToDo (Release)
+    // Open -> ToDo (Release)
     if (Task_state === "ToDo" && t.Task_state === "Open") {
       // require a plan before release
       // const hasPlan = t.Task_plan != null && String(t.Task_plan).trim() !== "";
@@ -343,7 +396,7 @@ export async function updateTask(req, res) {
 
     // Doing -> Done (Review)
     if (Task_state === "Done" && t.Task_state === "Doing") {
-      if (!(await userInAny(permitToDo))) {
+      if (!(await userInAny(permitDoing))) {
         await conn.rollback();
         return res.status(403).json({ ok: false, message: "Not permitted to review this task" });
       }
