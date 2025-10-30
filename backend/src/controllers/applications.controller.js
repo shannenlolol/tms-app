@@ -11,6 +11,16 @@ import pool from "../models/db.js";
 
 const asStr = (v) => (v == null ? "" : String(v));
 
+/** Convert various inputs (Date, ISO, 'YYYY-MM-DD') to 'YYYY-MM-DD' or null if empty/invalid */
+function toSQLDate(value) {
+  const s = asStr(value).trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;        // already date-only
+  const d = new Date(s);
+  if (!Number.isNaN(+d)) return d.toISOString().slice(0, 10);
+  return null; // invalid
+}
+
 const normCSV = (v) => {
   if (Array.isArray(v)) {
     return v.map((s) => asStr(s).trim()).filter(Boolean).join(",");
@@ -22,12 +32,6 @@ const normCSV = (v) => {
     .join(","); // store as comma-separated in DB
 };
 const isNonEmptyCSV = (v) => normCSV(v).length > 0;
-
-function isValidDateStr(s) {
-  if (!s) return true;
-  const d = new Date(s);
-  return !Number.isNaN(+d);
-}
 
 // Adjust this if your task table/column names differ
 const TASK_COUNT_SQL = `
@@ -84,8 +88,8 @@ export async function createApplication(req, res, next) {
     const body = req.body || {};
     const App_Acronym     = asStr(body.App_Acronym).trim();
     const App_Description = asStr(body.App_Description);
-    const App_startDate   = asStr(body.App_startDate); // REQUIRED
-    const App_endDate     = asStr(body.App_endDate);   // REQUIRED
+    const App_startDate   = toSQLDate(body.App_startDate); // REQUIRED, normalised
+    const App_endDate     = toSQLDate(body.App_endDate);   // REQUIRED, normalised
 
     // Normalised CSV permits (all REQUIRED)
     const App_permit_Create   = normCSV(body.Permit_Create);
@@ -105,31 +109,10 @@ export async function createApplication(req, res, next) {
       return res.status(400).json({ ok: false, message: "App_endDate is required" });
     }
 
-    // Date format & order checks
-    if (!isValidDateStr(App_startDate) || !isValidDateStr(App_endDate)) {
-      return res.status(400).json({ ok: false, message: "Invalid date format" });
-    }
+    // Date order check (safe: both are YYYY-MM-DD now)
     if (new Date(App_endDate) < new Date(App_startDate)) {
       return res.status(400).json({ ok: false, message: "End date cannot be before start date" });
     }
-
-    // Permit CSVs must not be empty
-    if (!isNonEmptyCSV(body.Permit_Create)) {
-      return res.status(400).json({ ok: false, message: "Permit_Create must contain at least one group" });
-    }
-    if (!isNonEmptyCSV(body.Permit_Open)) {
-      return res.status(400).json({ ok: false, message: "Permit_Open must contain at least one group" });
-    }
-    if (!isNonEmptyCSV(body.Permit_ToDo)) {
-      return res.status(400).json({ ok: false, message: "Permit_ToDo must contain at least one group" });
-    }
-    if (!isNonEmptyCSV(body.Permit_Doing)) {
-      return res.status(400).json({ ok: false, message: "Permit_Doing must contain at least one group" });
-    }
-    if (!isNonEmptyCSV(body.Permit_Done)) {
-      return res.status(400).json({ ok: false, message: "Permit_Done must contain at least one group" });
-    }
-    // -------------------------
 
     // Uniqueness on acronym
     const [exist] = await pool.query(
@@ -149,8 +132,8 @@ export async function createApplication(req, res, next) {
       [
         App_Acronym,
         App_Description || null,
-        App_startDate,       // required & validated
-        App_endDate,         // required & validated
+        App_startDate,       // required & validated (YYYY-MM-DD)
+        App_endDate,         // required & validated (YYYY-MM-DD)
         App_permit_Create,   // required & non-empty
         App_permit_Open,     // required & non-empty
         App_permit_toDoList, // required & non-empty
@@ -186,41 +169,57 @@ export async function updateApplication(req, res, next) {
     }
 
     const body = req.body || {};
-    const App_Description = asStr(body.App_Description);
-    const App_startDate   = asStr(body.App_startDate);
-    const App_endDate     = asStr(body.App_endDate);
+    const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
 
-    // Allow updating permits as well (optional for current UI, but future-proof)
-    const wantPermits = [
-      "Permit_Create",
-      "Permit_Open",
-      "Permit_ToDo",
-      "Permit_Doing",
-      "Permit_Done",
-    ].some((k) => Object.prototype.hasOwnProperty.call(body, k));
+    // Build dynamic UPDATE only for provided fields (avoid clobbering NULLs unintentionally)
+    const sets = [];
+    const params = [];
 
-    const App_permit_Create   = normCSV(body.Permit_Create);
-    const App_permit_Open     = normCSV(body.Permit_Open);
-    const App_permit_toDoList = normCSV(body.Permit_ToDo);
-    const App_permit_Doing    = normCSV(body.Permit_Doing);
-    const App_permit_Done     = normCSV(body.Permit_Done);
-
-    if (!isValidDateStr(App_startDate) || !isValidDateStr(App_endDate)) {
-      return res.status(400).json({ ok: false, message: "Invalid date format" });
-    }
-    if (App_startDate && App_endDate && new Date(App_endDate) < new Date(App_startDate)) {
-      return res.status(400).json({ ok: false, message: "End date cannot be before start date" });
+    // Description
+    if (has("App_Description")) {
+      const App_Description = asStr(body.App_Description);
+      sets.push("App_Description = ?");
+      params.push(App_Description || null);
     }
 
-    // Build dynamic UPDATE to avoid clobbering NULLs unless sent
-    const sets = [
-      "App_Description = ?",
-      "App_startDate = ?",
-      "App_endDate = ?",
-    ];
-    const params = [App_Description || null, App_startDate || null, App_endDate || null];
+    // Dates (normalise if provided)
+    let startDateSQL = null;
+    let endDateSQL = null;
+    if (has("App_startDate")) {
+      startDateSQL = toSQLDate(body.App_startDate);
+      if (body.App_startDate && !startDateSQL) {
+        return res.status(400).json({ ok: false, message: "Invalid start date format" });
+      }
+      sets.push("App_startDate = ?");
+      params.push(startDateSQL || null);
+    }
+    if (has("App_endDate")) {
+      endDateSQL = toSQLDate(body.App_endDate);
+      if (body.App_endDate && !endDateSQL) {
+        return res.status(400).json({ ok: false, message: "Invalid end date format" });
+      }
+      sets.push("App_endDate = ?");
+      params.push(endDateSQL || null);
+    }
 
-    if (wantPermits) {
+    // If both dates are being updated in the same call, enforce order
+    if (has("App_startDate") && has("App_endDate") && startDateSQL && endDateSQL) {
+      if (new Date(endDateSQL) < new Date(startDateSQL)) {
+        return res.status(400).json({ ok: false, message: "End date cannot be before start date" });
+      }
+    }
+
+    // Permits (optional update)
+    const touchingPermits = ["Permit_Create", "Permit_Open", "Permit_ToDo", "Permit_Doing", "Permit_Done"]
+      .some(has);
+
+    if (touchingPermits) {
+      const App_permit_Create   = normCSV(body.Permit_Create);
+      const App_permit_Open     = normCSV(body.Permit_Open);
+      const App_permit_toDoList = normCSV(body.Permit_ToDo);
+      const App_permit_Doing    = normCSV(body.Permit_Doing);
+      const App_permit_Done     = normCSV(body.Permit_Done);
+
       sets.push(
         "App_permit_Create = ?",
         "App_permit_Open = ?",
@@ -235,6 +234,11 @@ export async function updateApplication(req, res, next) {
         App_permit_Doing || null,
         App_permit_Done || null
       );
+    }
+
+    if (!sets.length) {
+      // Nothing to update
+      return res.json({ ok: true, message: "No fields to update" });
     }
 
     params.push(paramAcr);
@@ -270,25 +274,6 @@ export async function updateApplication(req, res, next) {
       [paramAcr]
     );
     res.json(mapRow(rows[0]));
-  } catch (e) {
-    next(e);
-  }
-}
-
-export async function deleteApplication(req, res, next) {
-  try {
-    const paramAcr = asStr(req.params.acronym).trim();
-    if (!paramAcr) {
-      return res.status(400).json({ ok: false, message: "Acronym param is required" });
-    }
-    const [result] = await pool.query(
-      `DELETE FROM application WHERE App_Acronym = ?`,
-      [paramAcr]
-    );
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ ok: false, message: "Application not found" });
-    }
-    res.json({ ok: true });
   } catch (e) {
     next(e);
   }

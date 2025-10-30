@@ -4,7 +4,6 @@ import {
   listApplications,
   createApplication,
   updateApplication,
-  deleteApplication,
 } from "../controllers/applications.controller.js";
 
 const router = Router();
@@ -20,8 +19,5 @@ router.post("/", createApplication);
 
 /** PUT /api/applications/:acronym */
 router.put("/:acronym", updateApplication);
-
-/** DELETE /api/applications/:acronym (optional) */
-router.delete("/:acronym", deleteApplication);
 
 export default router;

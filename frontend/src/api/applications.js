@@ -18,9 +18,3 @@ export async function updateApplication(acronym, app) {
   const { data } = await client.put(`/applications/${encodeURIComponent(acronym)}`, app);
   return data;
 }
-
-/** (Optional) DELETE /api/applications/:acronym */
-export async function deleteApplication(acronym) {
-  const { data } = await client.delete(`/applications/${encodeURIComponent(acronym)}`);
-  return data;
-}
