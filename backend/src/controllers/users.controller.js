@@ -73,6 +73,27 @@ async function normaliseGroups(input) {
   }
   return out;
 }
+// Actor must be both admin and active at the moment of save
+async function isAdminCurrently(conn, username) {
+  const uname = String(username || "").trim().toLowerCase();
+  if (!uname) return false;
+
+  const [[row]] = await conn.query(
+    "SELECT usergroups, active FROM accounts WHERE username = ? LIMIT 1",
+    [uname]
+  );
+  if (!row) return false;
+
+  const isActive = !!row.active; // 1/0 → boolean
+  const isAdmin = String(row.usergroups || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .includes("admin");
+
+  return isActive && isAdmin;
+}
+
 
 // Ensure username/email uniqueness (case-insensitive email)
 // !! excludeUsername for update (since can't edit username, just ensure email is unique)
@@ -211,6 +232,7 @@ export async function create(req, res, next) {
 
 /** PUT /api/users/:username  (full update; password optional) */
 export async function update(req, res, next) {
+  const conn = await pool.getConnection();
   try {
     // target username comes from URL, not the logged-in user
     const targetUsername = req.params.username;
@@ -220,6 +242,24 @@ export async function update(req, res, next) {
         ok: false,
         code: check.code || "POLICY_VIOLATION",
         message: check.message,
+      });
+    }
+
+    const actor = String(req.user?.username || "").trim().toLowerCase();
+    if (!actor) {
+      return res.status(401).json({ ok: false, message: "Unauthorised" });
+    }
+
+    await conn.beginTransaction();
+
+    // PRIVILEGE DRIFT CHECK (admin AND active must still hold)
+    const stillCanAdmin = await isAdminCurrently(conn, actor);
+    if (!stillCanAdmin) {
+      await conn.rollback();
+      return res.status(403).json({
+        ok: false,
+        code: "PRIVILEGE_DRIFT",
+        message: "Not permitted. Your privileges/account status has changed; please refresh.",
       });
     }
 
@@ -236,11 +276,18 @@ export async function update(req, res, next) {
     const emailDb = String(email || "").trim().toLowerCase(); // normalise email
 
     if (!emailOk(emailDb)) {
-      return res.status(400).send("Email must be valid.");
+      await conn.rollback();
+      return res.status(400).json({ ok: false, message: "Email must be valid." });
     }
 
-    const uniq = await assertUniqueUsernameEmail({ username: usernameDb, email: emailDb, excludeUsername: true });
+    // Uniqueness (kept same)
+    const uniq = await assertUniqueUsernameEmail({
+      username: usernameDb,
+      email: emailDb,
+      excludeUsername: true,
+    });
     if (!uniq.ok) {
+      await conn.rollback();
       return res.status(409).json({
         ok: false,
         code: uniq.code,
@@ -257,11 +304,12 @@ export async function update(req, res, next) {
 
     if (password && password.length > 0) {
       if (!pwdOk(password)) {
-        return res
-          .status(400)
-          .send(
-            "Password must be 8–10 characters long and include at least one letter, one number, and one special character."
-          );
+        await conn.rollback();
+        return res.status(400).json({
+          ok: false,
+          message:
+            "Password must be 8–10 characters long and include at least one letter, one number, and one special character.",
+        });
       }
       const password_hash = await bcrypt.hash(password, ROUNDS);
       fields.push("password = ?");
@@ -271,26 +319,40 @@ export async function update(req, res, next) {
     // IMPORTANT: scope to the targeted row
     params.push(targetUsername);
     const sql = `UPDATE accounts SET ${fields.join(", ")} WHERE username = ? LIMIT 1`;
-    await pool.query(sql, params);
+    await conn.query(sql, params);
 
     // Return the updated row
-    const [[row]] = await pool.query(
+    const [[row]] = await conn.query(
       "SELECT username, email, active, usergroups FROM accounts WHERE username = ? LIMIT 1",
       [targetUsername]
     );
-    if (!row) return res.status(404).send("User not found after update.");
+    if (!row) {
+      await conn.rollback();
+      return res.status(404).json({ ok: false, message: "User not found after update." });
+    }
 
-    res.json({
+    await conn.commit();
+    return res.json({
       username: row.username,
       email: row.email ?? "",
       usergroup: toArray(row.usergroups),
       active: !!row.active,
     });
   } catch (e) {
-    if (e.status) return res.status(e.status).send(e.message);
+    try { await conn.rollback(); } catch {}
+    if (e.status) {
+      return res.status(e.status).json({
+        ok: false,
+        code: e.code || "ERROR",
+        message: e.message || "Request failed",
+      });
+    }
     next(e);
+  } finally {
+    conn.release();
   }
 }
+
 
 /* POST /api/users/check-group */
 export async function checkGroup(req, res, next) {

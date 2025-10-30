@@ -386,7 +386,7 @@ export default function Kanban() {
       return;
     }
     if (!canCreate) {
-      setErr("You’re not permitted to create tasks for this application.");
+      setErr("Not permitted to create tasks for this application.");
       return;
     }
     try {

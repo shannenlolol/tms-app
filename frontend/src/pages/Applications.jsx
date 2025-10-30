@@ -1,8 +1,7 @@
 // src/pages/Applications.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { getApplications, createApplication, updateApplication } from "../api/applications"; // <= added update
+import { getApplications, createApplication, updateApplication } from "../api/applications";
 import { getUserGroups } from "../api/groups";
 import UserGroupPicker from "../components/UserGroupPicker";
 import TinyDatePicker from "../components/TinyDatePicker";
@@ -42,15 +41,8 @@ function useIsProjectLead(user) {
   return state; // { loading, isProjectLead }
 }
 
-// date helpers (unchanged)
+// date helpers
 const pad2 = (n) => String(n).padStart(2, "0");
-function fmtLocalDate(value) {
-  if (!value) return "";
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(+d)) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
-}
 function fmtISODate(value) {
   if (!value) return "";
   const d = value instanceof Date ? value : new Date(value);
@@ -84,25 +76,6 @@ function GroupText({ value, className = "" }) {
   );
 }
 
-/** Hide native dd/mm/yyyy ghost without CSS */
-function DateInput({ value, onChange, className = "", ...props }) {
-  const [focused, setFocused] = React.useState(false);
-  const type = focused || value ? "date" : "text";
-  const v = type === "date" ? fmtISODate(value) : fmtDisplayDate(value);
-  return (
-    <input
-      type={type}
-      className={className}
-      value={v}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder=""
-      autoComplete="off"
-      {...props}
-    />
-  );
-}
 const toArr = (v) => (Array.isArray(v) ? v : csvToArr(v));
 const normLowerSorted = (arr) =>
   toArr(arr).map((s) => String(s).trim().toLowerCase()).filter(Boolean).sort();
@@ -137,10 +110,12 @@ const isRowDirty = (row, draft) => {
     !sameArr(row.Permit_Done, draft.Permit_Done)
   );
 };
+
 export default function Applications() {
   const { ready, isAuthenticated, user } = useAuth();
   const { loading: roleLoading, isProjectLead } = useIsProjectLead(user);
-  const navigate = useNavigate();
+  const canEdit = !!isProjectLead; // single gate for UI controls
+
   const [drafts, setDrafts] = useState({});        // { [acronym]: draft }
   const [saving, setSaving] = useState({});        // { [acronym]: boolean }
   const emptyNew = useMemo(
@@ -164,10 +139,7 @@ export default function Applications() {
   const [newError, setNewError] = useState("");
   const [newApp, setNewApp] = useState(emptyNew);
 
-  // NEW: editing state
-  const [editKey, setEditKey] = useState("");           // App_Acronym being edited
   const [editError, setEditError] = useState("");
-  const [editForm, setEditForm] = useState(null);       // shape mirrors row but WITHOUT acronym/task count
 
   function showNewError(message) {
     setNewError(message);
@@ -201,16 +173,12 @@ export default function Applications() {
       }
     })();
   }, [ready, isAuthenticated]);
+
   useEffect(() => {
     if (!loading && rows.length) {
       setDrafts(Object.fromEntries(rows.map((r) => [r.App_Acronym, makeDraftFromRow(r)])));
     }
   }, [loading, rows]);
-
-  function showEditError(message) {
-    setEditError(message);
-    setTimeout(() => setEditError(""), 5000);
-  }
 
   function validateDraft(d) {
     const sd = asStr(d.App_startDate);
@@ -220,6 +188,7 @@ export default function Applications() {
   }
 
   async function saveRow(acronym) {
+    if (!canEdit) return;
     const draft = drafts[acronym];
     const err = validateDraft(draft);
     if (err) return showEditError(err);
@@ -243,9 +212,7 @@ export default function Applications() {
         App_endDate: asStr(updated.App_endDate),
         App_taskCount: clampInt(updated.App_taskCount),
       };
-      // update rows
       setRows((rs) => sortByAcronymAsc(rs.map((r) => (r.App_Acronym === acronym ? mapped : r))));
-      // refresh draft from latest
       setDrafts((ds) => ({ ...ds, [acronym]: makeDraftFromRow(mapped) }));
     } catch (e) {
       const m =
@@ -256,6 +223,7 @@ export default function Applications() {
       setSaving((s) => ({ ...s, [acronym]: false }));
     }
   }
+
   const changeNew = (key, value) => setNewApp((prev) => ({ ...prev, [key]: value }));
 
   function validateAppShapeLikeCreate(a) {
@@ -266,7 +234,7 @@ export default function Applications() {
   }
 
   const createNew = async () => {
-    if (!isProjectLead) {
+    if (!canEdit) {
       return showNewError("Only Project Lead can create applications.");
     }
     const err = validateAppShapeLikeCreate(newApp);
@@ -302,60 +270,6 @@ export default function Applications() {
     }
   };
 
-  // ----- EDITING -----
-  function startEdit(row) {
-    // only Project Lead can edit apps (mirror create restriction; tweak if different)
-    if (!isProjectLead) return;
-    setEditKey(row.App_Acronym);
-    setEditForm({
-      App_Description: row.App_Description || "",
-      App_startDate: row.App_startDate || "",
-      App_endDate: row.App_endDate || "",
-      // allow updating permits too
-      Permit_Create: Array.isArray(row.Permit_Create) ? row.Permit_Create : csvToArr(row.Permit_Create),
-      Permit_Open: Array.isArray(row.Permit_Open) ? row.Permit_Open : csvToArr(row.Permit_Open),
-      Permit_ToDo: Array.isArray(row.Permit_ToDo) ? row.Permit_ToDo : csvToArr(row.Permit_ToDo),
-      Permit_Doing: Array.isArray(row.Permit_Doing) ? row.Permit_Doing : csvToArr(row.Permit_Doing),
-      Permit_Done: Array.isArray(row.Permit_Done) ? row.Permit_Done : csvToArr(row.Permit_Done),
-    });
-  }
-  function cancelEdit() {
-    setEditKey("");
-    setEditForm(null);
-    setEditError("");
-  }
-  async function saveEdit(acronym) {
-    const err = validateAppShapeLikeCreate(editForm || {});
-    if (err) return showEditError(err);
-    try {
-      const payload = {
-        App_Description: editForm.App_Description,
-        App_startDate: editForm.App_startDate,
-        App_endDate: editForm.App_endDate,
-        // include permits so the server can update them
-        Permit_Create: editForm.Permit_Create,
-        Permit_Open: editForm.Permit_Open,
-        Permit_ToDo: editForm.Permit_ToDo,
-        Permit_Doing: editForm.Permit_Doing,
-        Permit_Done: editForm.Permit_Done,
-      };
-      const updated = await updateApplication(acronym, payload);
-      const mapped = {
-        ...updated,
-        App_startDate: asStr(updated.App_startDate),
-        App_endDate: asStr(updated.App_endDate),
-        App_taskCount: clampInt(updated.App_taskCount),
-      };
-      setRows((rs) => sortByAcronymAsc(rs.map((r) => (r.App_Acronym === acronym ? mapped : r))));
-      cancelEdit();
-    } catch (e) {
-      const m =
-        (typeof e?.response?.data === "string" ? e.response.data : e?.response?.data?.message) ||
-        e?.message || "Update failed";
-      showEditError(m);
-    }
-  }
-
   return (
     <div className="p-4">
       <p className="text-xl px-2 mb-6"><b>Applications</b></p>
@@ -373,7 +287,7 @@ export default function Applications() {
             <col className="w-26" />
             <col className="w-26" />
             <col className="w-12" />
-            <col className="w-12" />
+            {canEdit && <col className="w-12" />}
           </colgroup>
           <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
             <tr>
@@ -387,13 +301,13 @@ export default function Applications() {
               <th className="px-2 py-3">Doing</th>
               <th className="px-2 py-3">Done</th>
               <th className="py-3">Tasks</th>
-              <th className="py-3"></th>
+              {canEdit && <th className="py-3"></th>}
             </tr>
           </thead>
 
           <tbody>
             {/* Add-new row: only for Project Lead */}
-            {isProjectLead && (
+            {canEdit && (
               <tr className="bg-indigo-50 dark:bg-gray-900 border-b dark:border-gray-700 border-gray-200">
                 <td className="px-1 py-3">
                   <input
@@ -456,9 +370,9 @@ export default function Applications() {
               </tr>
             )}
 
-            {newError && (
+            {newError && canEdit && (
               <tr>
-                <td colSpan={11} className="px-6 pb-4">
+                <td colSpan={canEdit ? 11 : 10} className="px-6 pb-4">
                   <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-rose-800 text-[15px]">
                     {newError}
                   </div>
@@ -467,7 +381,7 @@ export default function Applications() {
             )}
             {editError && (
               <tr>
-                <td colSpan={11} className="px-6 pb-4">
+                <td colSpan={canEdit ? 11 : 10} className="px-6 pb-4">
                   <div className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-rose-800 text-[15px]">
                     {editError}
                   </div>
@@ -475,10 +389,10 @@ export default function Applications() {
               </tr>
             )}
 
-            {/* Existing rows (always editable except Acronym & Tasks) */}
+            {/* Existing rows */}
             {loading ? (
               <tr>
-                <td className="px-6 py-4" colSpan={11}>Loading…</td>
+                <td className="px-6 py-4" colSpan={canEdit ? 11 : 10}>Loading…</td>
               </tr>
             ) : (
               rows.map((row) => {
@@ -489,72 +403,106 @@ export default function Applications() {
 
                 return (
                   <tr key={asStr(acr)} className="bg-white border-b border-gray-200">
-                    {/* Acronym: read-only */}
+                    {/* Acronym: read-only always */}
                     <td className="px-1 py-3">
                       <div className="px-2 py-1 font-medium">{acr}</div>
                     </td>
 
-                    {/* Description: editable */}
+                    {/* Description */}
                     <td className="px-1 py-3">
-                      <textarea
-                        className="w-full max-w-full min-w-full resize rounded-md border border-gray-300 px-2 py-1 bg-white"
-                        rows={1}
-                        value={d.App_Description}
-                        onChange={(e) =>
-                          setDrafts((ds) => ({ ...ds, [acr]: { ...d, App_Description: e.target.value } }))
-                        }
-                      />
+                      {canEdit ? (
+                        <textarea
+                          className="w-full max-w-full min-w-full resize rounded-md border border-gray-300 px-2 py-1 bg-white"
+                          rows={1}
+                          value={d.App_Description}
+                          onChange={(e) =>
+                            setDrafts((ds) => ({ ...ds, [acr]: { ...d, App_Description: e.target.value } }))
+                          }
+                        />
+                      ) : (
+                        <textarea readOnly className="w-full max-w-full min-w-full resize rounded-md border border-gray-300 px-2 py-1 bg-white" rows={1} value= {row.App_Description || <span className="text-gray-400">—</span>}/>
+                      )}
                     </td>
 
-                    {/* Dates: editable */}
+                    {/* Start Date */}
                     <td className="px-4 py-3">
-                      <TinyDatePicker
-                        value={d.App_startDate}
-                        onChange={(iso) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, App_startDate: iso } }))}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <TinyDatePicker
-                        value={d.App_endDate}
-                        onChange={(iso) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, App_endDate: iso } }))}
-                      />
+                      {canEdit ? (
+                        <TinyDatePicker
+                          value={d.App_startDate}
+                          onChange={(iso) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, App_startDate: iso } }))}
+                        />
+                      ) : (
+                        <div className="px-1">{fmtDisplayDate(row.App_startDate) || <span className="text-gray-400">—</span>}</div>
+                      )}
                     </td>
 
-                    {/* Permits: editable */}
+                    {/* End Date */}
+                    <td className="px-4 py-3">
+                      {canEdit ? (
+                        <TinyDatePicker
+                          value={d.App_endDate}
+                          onChange={(iso) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, App_endDate: iso } }))}
+                        />
+                      ) : (
+                        <div className="px-1">{fmtDisplayDate(row.App_endDate) || <span className="text-gray-400">—</span>}</div>
+                      )}
+                    </td>
+
+                    {/* Permits */}
                     <td className="px-1 py-3">
-                      <UserGroupPicker
-                        value={d.Permit_Create}
-                        onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_Create: vals } }))}
-                        options={groupOptions}
-                      />
+                      {canEdit ? (
+                        <UserGroupPicker
+                          value={d.Permit_Create}
+                          onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_Create: vals } }))}
+                          options={groupOptions}
+                        />
+                      ) : (
+                        <GroupText value={row.Permit_Create} />
+                      )}
                     </td>
                     <td className="px-1 py-3">
-                      <UserGroupPicker
-                        value={d.Permit_Open}
-                        onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_Open: vals } }))}
-                        options={groupOptions}
-                      />
+                      {canEdit ? (
+                        <UserGroupPicker
+                          value={d.Permit_Open}
+                          onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_Open: vals } }))}
+                          options={groupOptions}
+                        />
+                      ) : (
+                        <GroupText value={row.Permit_Open} />
+                      )}
                     </td>
                     <td className="px-1 py-3">
-                      <UserGroupPicker
-                        value={d.Permit_ToDo}
-                        onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_ToDo: vals } }))}
-                        options={groupOptions}
-                      />
+                      {canEdit ? (
+                        <UserGroupPicker
+                          value={d.Permit_ToDo}
+                          onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_ToDo: vals } }))}
+                          options={groupOptions}
+                        />
+                      ) : (
+                        <GroupText value={row.Permit_ToDo} />
+                      )}
                     </td>
                     <td className="px-1 py-3">
-                      <UserGroupPicker
-                        value={d.Permit_Doing}
-                        onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_Doing: vals } }))}
-                        options={groupOptions}
-                      />
+                      {canEdit ? (
+                        <UserGroupPicker
+                          value={d.Permit_Doing}
+                          onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_Doing: vals } }))}
+                          options={groupOptions}
+                        />
+                      ) : (
+                        <GroupText value={row.Permit_Doing} />
+                      )}
                     </td>
                     <td className="px-1 py-3">
-                      <UserGroupPicker
-                        value={d.Permit_Done}
-                        onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_Done: vals } }))}
-                        options={groupOptions}
-                      />
+                      {canEdit ? (
+                        <UserGroupPicker
+                          value={d.Permit_Done}
+                          onChange={(vals) => setDrafts((ds) => ({ ...ds, [acr]: { ...d, Permit_Done: vals } }))}
+                          options={groupOptions}
+                        />
+                      ) : (
+                        <GroupText value={row.Permit_Done} />
+                      )}
                     </td>
 
                     {/* Tasks: read-only */}
@@ -562,30 +510,26 @@ export default function Applications() {
                       <div className="w-full">{row.App_taskCount ?? 0}</div>
                     </td>
 
-                    {/* Single Save button (enabled only if dirty & PL) */}
-                    <td className="px-1 py-3">
-                      <button
-                        onClick={() => saveRow(acr)}
-                        disabled={!dirty || !isProjectLead || savingRow}
-                        className={`w-8 h-8 !p-2 rounded-md inline-flex items-center justify-center ${dirty && isProjectLead && !savingRow
-                            ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                            : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    {/* Save button only if PL */}
+                    {canEdit && (
+                      <td className="px-1 py-3">
+                        <button
+                          onClick={() => saveRow(acr)}
+                          disabled={!isRowDirty(row, d) || savingRow}
+                          className={`w-8 h-8 !p-2 rounded-md inline-flex items-center justify-center ${
+                            isRowDirty(row, d) && !savingRow
+                              ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                              : "bg-gray-200 text-gray-400 cursor-not-allowed"
                           }`}
-                        aria-label="Save"
-                        title={
-                          !isProjectLead
-                            ? "Only Project Lead can save"
-                            : dirty
-                              ? "Save"
-                              : "No changes"
-                        }
-                      >
-                        {/* check icon */}
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                      </button>
-                    </td>
+                          aria-label="Save"
+                          title={isRowDirty(row, d) ? "Save" : "No changes"}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 6L9 17l-5-5" />
+                          </svg>
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })
