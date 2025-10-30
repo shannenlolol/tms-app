@@ -1,53 +1,43 @@
-// App.jsx
-import React, { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+// src/App.jsx
+import React from "react";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
-import { checkGroup } from "./api/users"; 
+
 import Login from "./pages/Login.jsx";
 import Applications from "./pages/Applications.jsx";
 import AdminHome from "./pages/AdminHome.jsx";
 import UpdateProfile from "./pages/UpdateProfile.jsx";
 import NavBar from "./components/NavBar.jsx";
-import { useLocation, useNavigate } from "react-router-dom";
 import Kanban from "./pages/Kanban.jsx";
 
-
-function useRoleFlags(user) {
-  const [flags, setFlags] = useState({ isAdmin: false, isProjectSide: false, isOther: true });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const username = String(user?.username || "").trim();
-        if (!username) {
-          if (!cancelled) setFlags({ isAdmin: false, isProjectSide: false, isOther: true });
-          return;
-        }
-        const [isAdmin, isPM, isPL, isDev] = await Promise.all([
-          checkGroup(username, "admin"),
-          checkGroup(username, "project manager"),
-          checkGroup(username, "project lead"),
-          checkGroup(username, "dev team"),
-        ]);
-        if (!cancelled) {
-          const isProjectSide = isPM || isPL || isDev;
-          const isOther = !isAdmin && !isProjectSide;
-          setFlags({ isAdmin, isProjectSide, isOther });
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-    // Re-run when username change
-  }, [user?.username]);
-
-  return { ...flags, loading };
+// ---- helpers to derive roles synchronously from the hydrated user ----
+function normaliseGroups(raw) {
+  const arr = Array.isArray(raw)
+    ? raw
+    : String(raw ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+  return new Set(arr.map((s) => s.toLowerCase()));
 }
 
+function roleFlagsFromUser(user) {
+  // Accept any of: user.groups, user.usergroups, user.usergroup (CSV or array)
+  const set = normaliseGroups(
+    user?.groups ?? user?.usergroups ?? user?.usergroup ?? []
+  );
+  const isAdmin = set.has("admin");
+  const isProjectSide =
+    set.has("project manager") || set.has("project lead") || set.has("dev team");
+  const isOther = !isAdmin && !isProjectSide;
+  return { isAdmin, isProjectSide, isOther };
+}
 
 function homeForRoles(flags) {
   if (flags.isAdmin) return "/admin";
@@ -56,39 +46,36 @@ function homeForRoles(flags) {
   return "/login";
 }
 
+// ---- role-aware fallback for "*" ----
 function RoleHomeRedirect() {
-  const { user } = useAuth();
-  const { loading, ...flags } = useRoleFlags(user);
-  if (loading) return <div className="p-6">Checking roles…</div>;
-  return <Navigate to={homeForRoles(flags)} replace />;
-}
-
-function AdminAutoRedirect() {
   const { ready, isAuthenticated, user } = useAuth();
-  const { loading, isAdmin } = useRoleFlags(user); // <- uses checkGroup under the hood
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!ready || loading) return;
-    if (!isAuthenticated) return; // login guard handles this
-    if (!isAdmin && location.pathname.startsWith("/admin")) {
-      navigate("/", { replace: true });
-    }
-  }, [ready, loading, isAuthenticated, isAdmin, location.pathname, navigate]);
-
-  return null;
-}
-
-
-function ProtectedRoutes({ allow, children }) {
-  const { ready, isAuthenticated, user } = useAuth();
-  const { loading, ...rf } = useRoleFlags(user);
 
   if (!ready) return <div className="p-6">Checking session…</div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (loading) return <div className="p-6">Authorising…</div>;
 
+  const flags = roleFlagsFromUser(user);
+  return <Navigate to={homeForRoles(flags)} replace />;
+}
+
+// ---- Protected route wrapper (uses only hydrated user; no extra fetches) ----
+function ProtectedRoutes({ allow, children }) {
+  const { ready, isAuthenticated, user } = useAuth();
+  const location = useLocation();
+
+  // 1) Wait for auth hydration
+  if (!ready) {
+    return <div className="p-6">Checking session…</div>;
+  }
+
+  // 2) If not authenticated, go to login and remember where we came from
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  // 3) Compute roles synchronously from user payload
+  const rf = roleFlagsFromUser(user);
+
+  // 4) Authorise the roles (admin supersedes others by construction)
   const ok =
     (allow?.includes("admin") && rf.isAdmin) ||
     (allow?.includes("project") && rf.isProjectSide) ||
@@ -97,13 +84,37 @@ function ProtectedRoutes({ allow, children }) {
   return ok ? children : <Navigate to={homeForRoles(rf)} replace />;
 }
 
+// ---- Canonical profile route ----
+// - Admins → /admin/profile
+// - Others → /profile page inline
+function ProfileRoute() {
+  const { ready, isAuthenticated, user } = useAuth();
+  const location = useLocation();
+
+  if (!ready) return <div className="p-6">Checking session…</div>;
+  if (!isAuthenticated)
+    return <Navigate to="/login" replace state={{ from: location }} />;
+
+  const { isAdmin } = roleFlagsFromUser(user);
+  if (isAdmin) return <Navigate to="/admin/profile" replace />;
+
+  return (
+    <>
+      <NavBar />
+      <UpdateProfile />
+    </>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-      <AdminAutoRedirect />
         <Routes>
+          {/* Public */}
           <Route path="/login" element={<Login />} />
+
+          {/* Admin area */}
           <Route
             path="/admin"
             element={
@@ -115,7 +126,6 @@ export default function App() {
               </ProtectedRoutes>
             }
           />
-
           <Route
             path="/admin/profile"
             element={
@@ -127,6 +137,8 @@ export default function App() {
               </ProtectedRoutes>
             }
           />
+
+          {/* Project-side / general users */}
           <Route
             path="/applications"
             element={
@@ -138,19 +150,6 @@ export default function App() {
               </ProtectedRoutes>
             }
           />
-
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoutes allow={["project", "other"]}>
-                <>
-                  <NavBar />
-                  <UpdateProfile />
-                </>
-              </ProtectedRoutes>
-            }
-          />
-
           <Route
             path="/kanban"
             element={
@@ -163,6 +162,10 @@ export default function App() {
             }
           />
 
+          {/* Canonical profile */}
+          <Route path="/profile" element={<ProfileRoute />} />
+
+          {/* Fallback */}
           <Route path="*" element={<RoleHomeRedirect />} />
         </Routes>
       </BrowserRouter>
