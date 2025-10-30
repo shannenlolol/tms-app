@@ -6,6 +6,7 @@ import { sendMail, getEmailsForGroups } from "../middleware/mailer.js";
 
 const NOTE_SEP = "\n--- NOTE ENTRY ---\n";
 const MAX_TASK_NAME = 50;
+const VALID_STATES = new Set(["Open", "ToDo", "Doing", "Done", "Closed"]);
 
 function fmtTs(d = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
@@ -143,13 +144,12 @@ export async function createTask(req, res) {
       // use initialNotes (includes "Task created" + optional initial note)
       [name, Task_description || null, initialNotes, plan, acr, username, Task_owner || null, taskId]
     );
-    console.log("JNDJKASNDJ")
     await conn.commit();
 
     res.status(201).json({
       Task_name: name,
       Task_description: Task_description || null,
-      Task_notes: initialNotes,            // 🔽 return the same notes back
+      Task_notes: initialNotes,            
       Task_plan: plan,
       Task_app_Acronym: acr,
       Task_state: "Open",
@@ -396,6 +396,157 @@ export async function updateTask(req, res) {
   } catch (e) {
     try { await conn.rollback(); } catch { }
     res.status(500).json({ ok: false, message: e.message || "Failed to update task" });
+  } finally {
+    conn.release();
+  }
+}
+
+
+/**
+ * GET /api/tasks/state/:state?app=APP_ACR&plan=PLAN_NAME
+ * Method name: GetTaskbyState
+ * Description: Retrieve tasks in a particular state (optionally filtered by app/plan).
+ */
+export async function getTasksByState(req, res) {
+  try {
+    const raw = String(req.params.state || "").trim();
+    // Normalise common spellings, e.g. "To-Do" → "ToDo"
+    const normalised =
+      raw.toLowerCase() === "to-do" || raw.toLowerCase() === "todo"
+        ? "ToDo"
+        : raw;
+
+    if (!VALID_STATES.has(normalised)) {
+      return res.status(400).json({
+        ok: false,
+        message: `Invalid state "${raw}". Allowed: ${[...VALID_STATES].join(", ")}.`,
+      });
+    }
+
+    const { app, plan } = req.query || {};
+    const where = ["Task_state = ?"];
+    const args = [normalised];
+
+    if (app) {
+      where.push("Task_app_Acronym = ?");
+      args.push(String(app));
+    }
+    if (plan) {
+      where.push("Task_plan = ?");
+      args.push(String(plan));
+    }
+
+    const sql = `
+      SELECT Task_name, Task_description, Task_notes, Task_plan, Task_app_Acronym,
+             Task_state, Task_creator, Task_owner, Task_createDate, Task_id
+      FROM task
+      WHERE ${where.join(" AND ")}
+      ORDER BY Task_createDate DESC, Task_name ASC
+    `;
+    const [rows] = await pool.query(sql, args);
+    return res.json(rows);
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, message: e?.message || "Failed to get tasks by state" });
+  }
+}
+
+
+/**
+ * PromoteTask2Done
+ * POST /api/tasks/:taskName/promote-to-done
+ * Preconditions:
+ *   - Task must currently be "Doing"
+ *   - Caller must be in any of the app's ToDo-permit groups (same as your existing rule)
+ * Effects:
+ *   - Sets Task_state = 'Done'
+ *   - Appends note "Task reviewed: Doing → Done"
+ *   - Sends minimal email to App_permit_Done groups saying task is ready for review
+ */
+export async function promoteTaskToDone(req, res) {
+  const conn = await pool.getConnection();
+  try {
+    const username = String(req.user?.username || "").trim();
+    if (!username) return res.status(401).json({ ok: false, message: "Unauthorised" });
+
+    const taskName = String(req.params.taskName || "").trim();
+    if (!taskName) return res.status(400).json({ ok: false, message: "Task name is required" });
+
+    await conn.beginTransaction();
+
+    // Load task & app permits
+    const [[t]] = await conn.query(
+      "SELECT Task_name, Task_state, Task_plan, Task_app_Acronym, Task_notes FROM task WHERE Task_name = ? LIMIT 1",
+      [taskName]
+    );
+    if (!t) { await conn.rollback(); return res.status(404).json({ ok: false, message: "Task not found" }); }
+
+    const [[a]] = await conn.query(
+      `SELECT App_Acronym, App_permit_Open, App_permit_toDoList, App_permit_Done
+       FROM application WHERE App_Acronym = ? LIMIT 1`,
+      [t.Task_app_Acronym]
+    );
+    if (!a) { await conn.rollback(); return res.status(404).json({ ok: false, message: "Application not found" }); }
+
+    // Must currently be Doing
+    if (t.Task_state !== "Doing") {
+      await conn.rollback();
+      return res.status(400).json({ ok: false, message: "Task is not in Doing state" });
+    }
+
+    // Permission: same as your existing Doing→Done rule (use ToDo permit)
+    const permitToDo = csv(a.App_permit_toDoList);
+    if (!(permitToDo.length && (await Promise.all(permitToDo.map(g => isUserInGroup(username, g)))).some(Boolean))) {
+      await conn.rollback();
+      return res.status(403).json({ ok: false, message: "Not permitted to review this task" });
+    }
+
+    // State change
+    await conn.query("UPDATE task SET Task_state='Done' WHERE Task_name=?", [taskName]);
+    await conn.query(
+      "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
+      [makeNoteEntry(username, "Task reviewed: Doing → Done", "Done"), taskName]
+    );
+
+    // Prepare email (notify Done-permit groups)
+    const permitDone = csv(a.App_permit_Done);
+    const notifyAfterCommit = {
+      appAcronym: t.Task_app_Acronym,
+      taskName,
+      reviewer: username,
+      permitDoneGroups: permitDone,
+    };
+
+    await conn.commit();
+
+    // Fire-and-forget email after commit
+    (async () => {
+      try {
+        const emails = await getEmailsForGroups(notifyAfterCommit.permitDoneGroups);
+        if (!emails.length) return;
+        const subject = `[${notifyAfterCommit.appAcronym}] Task ready for Review: ${notifyAfterCommit.taskName}`;
+        const text =
+          `Task "${notifyAfterCommit.taskName}" in Application "${notifyAfterCommit.appAcronym}" ` +
+          `was promoted to Done by ${notifyAfterCommit.reviewer}. ` +
+          `Please review the task.`;
+        await sendMail(emails.join(","), subject, text);
+      } catch (e) {
+        console.error("Done-review email failed:", e?.message || e);
+      }
+    })();
+
+    // Return updated task
+    const [rows] = await pool.query(
+      `SELECT Task_name, Task_description, Task_notes, Task_plan, Task_app_Acronym,
+              Task_state, Task_creator, Task_owner, Task_createDate, Task_id
+       FROM task WHERE Task_name = ?`,
+      [taskName]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    try { await conn.rollback(); } catch {}
+    res.status(500).json({ ok: false, message: e?.message || "Failed to promote task to Done" });
   } finally {
     conn.release();
   }
