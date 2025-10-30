@@ -109,11 +109,10 @@ export default function TaskDetailsModal({
 
   async function runAction(label, fn, { requirePlan = false } = {}) {
     if (busyAction) return;
-    if (requirePlan && !hasPlan(task)) {
-      console.log("Jfnijasn")
-      setMsg(`Please select a plan before ${label} this task.`);
-      return;
-    }
+    // if (requirePlan && !hasPlan(task)) {
+    //   setMsg(`Please select a plan before ${label} this task.`);
+    //   return;
+    // }
     try {
       setBusyAction(label);
       await fn?.();

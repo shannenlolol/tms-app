@@ -282,11 +282,11 @@ export async function updateTask(req, res) {
     // Open/Doing -> ToDo (Release)
     if (Task_state === "ToDo" && t.Task_state === "Open") {
       // require a plan before release
-      const hasPlan = t.Task_plan != null && String(t.Task_plan).trim() !== "";
-      if (!hasPlan) {
-        await conn.rollback();
-        return res.status(400).json({ ok: false, message: "A plan must be selected before releasing this task" });
-      }
+      // const hasPlan = t.Task_plan != null && String(t.Task_plan).trim() !== "";
+      // if (!hasPlan) {
+      //   await conn.rollback();
+      //   return res.status(400).json({ ok: false, message: "A plan must be selected before releasing this task" });
+      // }
       if (!(await userInAny(permitOpen))) {
         await conn.rollback();
         return res.status(403).json({ ok: false, message: "Not permitted to release this task" });
