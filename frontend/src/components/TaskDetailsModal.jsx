@@ -262,7 +262,7 @@ export default function TaskDetailsModal({
                   className={`rounded-md mt-6 px-3 py-1.5 text-white ${disableAll ? "bg-indigo-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
                     }`}
                 >
-                  {busyAction === "take" ? "Taking…" : "Take Task"}
+                  {busyAction === "take" ? "Taking…" : "Start Task"}
                 </button>
               </div>
             )}
@@ -297,7 +297,7 @@ export default function TaskDetailsModal({
                   className={`btn-red rounded-md px-3 py-1.5 text-white ${disableAll ? "bg-amber-300 cursor-not-allowed" : "bg-amber-600 hover:bg-amber-700"
                     }`}
                 >
-                  {busyAction === "drop" ? "Dropping…" : "Drop Task"}
+                  {busyAction === "drop" ? "Dropping…" : "Return Task"}
                 </button>
               </div>
             )}

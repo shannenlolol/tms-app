@@ -39,10 +39,13 @@ export const login = async (req, res, next) => {
     if (!ok) {
       return res.status(401).json({ ok: false, message: "Invalid Username and/or Password" });
     }
-    if (user.active !== 1){
+    if (user.active !== 1) {
       return res.status(401).json({ ok: false, message: "Inactive account" });
     }
-    const accessToken = makeAccessToken({ username: user.username });
+    const ua = req.headers["user-agent"] || "";
+    const ip = req.ip;
+
+    const accessToken = makeAccessToken(user, { ua, ip });
     const refreshToken = makeRefreshToken({ username: user.username });
 
     setRefreshCookie(res, refreshToken);
@@ -50,7 +53,7 @@ export const login = async (req, res, next) => {
     return res.json({
       ok: true,
       accessToken,
-      user: { username: user.username  },
+      user: { username: user.username },
     });
   } catch (err) {
     console.error("Auth login error:", err);
@@ -68,9 +71,11 @@ export const refresh = (req, res) => {
     const now = new Date();
     console.log(`verify refresh token in cookie to make access token: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
     const payload = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
-    const accessToken = makeAccessToken({ username: payload.username });
-    return res.json({ ok: true, accessToken });
-  } catch {
+    const ua = req.headers["user-agent"] || "";
+    const ip = req.ip;
+    const newAT = makeAccessToken({ username: payload.username }, { ua, ip });
+    res.json({ ok: true, accessToken: newAT });
+  }catch {
     return res.status(401).json({ ok: false, message: "Invalid or expired refresh token" });
   }
 };

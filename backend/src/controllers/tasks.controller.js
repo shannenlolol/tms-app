@@ -320,7 +320,8 @@ export async function updateTask(req, res) {
       await conn.query("UPDATE task SET Task_plan = ? WHERE Task_name = ?", [nextPlan, taskName]);
 
       // Only append a "plan changed/cleared" note if this request ALSO changes state
-      if (stateSupplied && prevPlan !== nextPlan) {
+      // if (stateSupplied && prevPlan !== nextPlan) {
+      if ( prevPlan !== nextPlan) {
         const planMsg = nextPlan ? `Plan changed to "${nextPlan}"` : "Plan cleared";
         await conn.query(
           "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
@@ -517,7 +518,9 @@ export async function updateTask(req, res) {
  */
 export async function getTasksByState(req, res) {
   try {
-    const raw = String(req.params.state || "").trim();
+    const raw = (req.body && typeof req.body.Task_state === "string" && req.body.Task_state) ||
+     String(req.params.state || "").trim();
+
     // Normalise common spellings, e.g. "To-Do" → "ToDo"
     const normalised =
       raw.toLowerCase() === "to-do" || raw.toLowerCase() === "todo"

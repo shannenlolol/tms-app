@@ -13,6 +13,7 @@ import plansRoutes from "./routes/plans.routes.js";
 import tasksRoutes from "./routes/tasks.routes.js";
 
 export const app = express();
+app.set("trust proxy", 1); // keep 0 if NOT behind a proxy in prod
 
 const ORIGIN = process.env.FRONTEND_ORIGIN || "https://localhost:5173";
 const NODE_ENV = process.env.NODE_ENV || "development";
