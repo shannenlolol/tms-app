@@ -402,7 +402,7 @@ export default function Applications() {
                 const savingRow = !!saving[acr];
 
                 return (
-                  <tr key={asStr(acr)} className="bg-white border-b border-gray-200">
+                  <tr key={asStr(acr)} className=" break-words bg-white border-b border-gray-200">
                     {/* Acronym: read-only always */}
                     <td className="px-1 py-3">
                       <div className="px-2 py-1 font-medium">{acr}</div>
@@ -420,7 +420,7 @@ export default function Applications() {
                           }
                         />
                       ) : (
-                        <textarea readOnly className="w-full max-w-full min-w-full resize rounded-md border border-gray-300 px-2 py-1 bg-white" rows={1} value= {row.App_Description || <span className="text-gray-400">—</span>}/>
+                        <textarea readOnly className="w-full max-w-full min-w-full resize rounded-md border border-gray-300 px-2 py-1 bg-white" rows={1} value={row.App_Description || <span className="text-gray-400">—</span>} />
                       )}
                     </td>
 
@@ -516,29 +516,28 @@ export default function Applications() {
                         <button
                           onClick={() => saveRow(acr)}
                           disabled={!isRowDirty(row, d) || savingRow}
-                          className={`w-8 h-8 !p-2 rounded-md inline-flex items-center justify-center ${
-                            isRowDirty(row, d) && !savingRow
+                          className={`w-8 h-8 !p-2 rounded-md inline-flex items-center justify-center ${isRowDirty(row, d) && !savingRow
                               ? "bg-emerald-600 text-white hover:bg-emerald-700"
                               : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                          }`}
+                            }`}
                           aria-label="Save"
                           title={isRowDirty(row, d) ? "Save" : "No changes"}
                         >
                           <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="w-5 h-5"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.25"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                        <polyline points="17 21 17 13 7 13 7 21" />
-                        <polyline points="7 3 7 8 15 8" />
-                      </svg>
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="w-5 h-5"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.25"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                            <polyline points="17 21 17 13 7 13 7 21" />
+                            <polyline points="7 3 7 8 15 8" />
+                          </svg>
                         </button>
                       </td>
                     )}

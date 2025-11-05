@@ -61,9 +61,9 @@ export default function CreateTaskModal({ ...props }) {
   }, [open, msg]);
 
   const changeAndClear = (k, v) => {
-  if (msg) setMsg(null);
-  setValues((prev) => ({ ...prev, [k]: v }));
-};
+    if (msg) setMsg(null);
+    setValues((prev) => ({ ...prev, [k]: v }));
+  };
   // ---------------------------------------------------------------------------
 
   // reset plan when app changes
@@ -169,12 +169,7 @@ export default function CreateTaskModal({ ...props }) {
             </label>
           </div>
         </div>
-        {/* Error banner with timeout */}
-        {msg?.text && (
-          <div className="mt-4 mb-2 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">
-            {msg.text}
-          </div>
-        )}
+
         <div className="mt-2 flex items-center gap-3">
           <button
             onClick={onSubmit}
@@ -184,7 +179,13 @@ export default function CreateTaskModal({ ...props }) {
           >
             Create Task
           </button>
-        </div>
+        </div>        '
+        {/* Error banner with timeout */}
+        {msg?.text && (
+          <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">
+            {msg.text}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -66,7 +66,7 @@ export default function CreatePlanModal({
     if (!d) return "";
     const x = new Date(d);
     if (Number.isNaN(+x)) return String(d);
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`;
   };
 
@@ -175,14 +175,25 @@ export default function CreatePlanModal({
               <div className="mb-1 text-sm">End Date</div>
               <input
                 type="date"
-                className={`w-full rounded-md border px-3 py-2 outline-none focus:border-indigo-400 focus:ring focus:ring-indigo-200/50 ${
-                  (!datesValid && end) ? "border-rose-400" : "border-gray-300"
-                }`}
+                className={`w-full rounded-md border px-3 py-2 outline-none focus:border-indigo-400 focus:ring focus:ring-indigo-200/50 ${(!datesValid && end) ? "border-rose-400" : "border-gray-300"
+                  }`}
                 value={end}
                 onChange={clearAnd((e) => setEnd(e.target.value))}
               />
             </label>
           </div>
+        </div>
+
+        <div className="mt-5 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={create}
+            disabled={disabled}
+            className={`rounded-lg px-4 py-2 text-white ${disabled ? "bg-gray-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
+              }`}
+          >
+            Create Plan
+          </button>
         </div>
         {msg && (
           <div
@@ -192,18 +203,6 @@ export default function CreatePlanModal({
             {msg}
           </div>
         )}
-        <div className="mt-5 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={create}
-            disabled={disabled}
-            className={`rounded-lg px-4 py-2 text-white ${
-              disabled ? "bg-gray-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
-            }`}
-          >
-            Create Plan
-          </button>
-        </div>
       </div>
     </div>
   );

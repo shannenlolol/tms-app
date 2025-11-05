@@ -12,7 +12,7 @@ import CreatePlanModal from "../components/CreatePlanModal";
 const COLUMNS = ["Open", "To-Do", "Doing", "Done", "Closed"];
 const STATE_MAP = {
   Open: "Open",
-  "To-Do": "ToDo", 
+  "To-Do": "ToDo",
   Doing: "Doing",
   Done: "Done",
   Closed: "Closed",
@@ -300,35 +300,35 @@ export default function Kanban() {
         : "";
 
     return (
-          <button
-      type="button"
-      onClick={() => openDetails(t)}
-      className="btn-white w-full text-left rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm hover:shadow-md hover:border-indigo-300 transition"
-    >
-      {/* Title */}
-      <div className="text-base text-gray-900">
-        <span className="font-semibold">{t.Task_id} : {t.Task_name}</span>
-      </div>
-
-      {/* Plan chip */}
-      {planName ? (
-        <div className="mt-3 mb-3 inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
-          {planName}
+      <button
+        type="button"
+        onClick={() => openDetails(t)}
+        className="btn-white break-words w-full text-left rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm hover:shadow-md hover:border-indigo-300 transition"
+      >
+        {/* Title */}
+        <div className="text-base text-gray-900">
+          <span className="font-semibold">{t.Task_id} : {t.Task_name}</span>
         </div>
-      ) : null}
 
-      {/* Date range */}
-      {range ? (
-        <div className="mt-1 text-xs text-gray-600">
-          {range}
+        {/* Plan chip */}
+        {planName ? (
+          <div className="mt-3 mb-3 inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+            {planName}
+          </div>
+        ) : null}
+
+        {/* Date range */}
+        {range ? (
+          <div className="mt-1 text-xs text-gray-600">
+            {range}
+          </div>
+        ) : null}
+
+        {/* Footer meta */}
+        <div className="mt-3 text-xs text-gray-500">
+          Created by: {creator}
         </div>
-      ) : null}
-
-      {/* Footer meta */}
-      <div className="mt-3 text-xs text-gray-500">
-        Created by: {creator}
-      </div>
-    </button>
+      </button>
     );
   }
 

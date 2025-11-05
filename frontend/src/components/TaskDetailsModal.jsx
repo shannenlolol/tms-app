@@ -220,16 +220,7 @@ export default function TaskDetailsModal({
                       );
                     })}
                 </select>
-                {/* error banner */}
-                {msg && (
-                  <div
-                    className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
-                    role="alert"
-                    aria-live="polite"
-                  >
-                    {msg}
-                  </div>
-                )}
+
                 <button
                   type="button"
                   onClick={handleReleaseClick}
@@ -239,12 +230,6 @@ export default function TaskDetailsModal({
                 >
                   {busyAction === "release" ? "Releasing…" : "Release Task"}
                 </button>
-              </div>
-            )}
-
-            {/* ACTIONS (ToDo) */}
-            {task.Task_state === "ToDo" && canToDoActions && (
-              <div className="mt-6">
                 {/* error banner */}
                 {msg && (
                   <div
@@ -255,6 +240,13 @@ export default function TaskDetailsModal({
                     {msg}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ACTIONS (ToDo) */}
+            {task.Task_state === "ToDo" && canToDoActions && (
+              <div className="mt-6">
+
                 <button
                   type="button"
                   onClick={handleTakeClick}
@@ -264,13 +256,6 @@ export default function TaskDetailsModal({
                 >
                   {busyAction === "take" ? "Taking…" : "Start Task"}
                 </button>
-              </div>
-            )}
-
-            {/* ACTIONS (Doing) */}
-            {task.Task_state === "Doing" && canDoingActions && (
-
-              <div className="mt-6">
                 {/* error banner */}
                 {msg && (
                   <div
@@ -281,6 +266,13 @@ export default function TaskDetailsModal({
                     {msg}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ACTIONS (Doing) */}
+            {task.Task_state === "Doing" && canDoingActions && (
+
+              <div className="mt-6">
                 <button
                   type="button"
                   onClick={handleReviewClick}
@@ -299,6 +291,16 @@ export default function TaskDetailsModal({
                 >
                   {busyAction === "drop" ? "Dropping…" : "Return Task"}
                 </button>
+                {/* error banner */}
+                {msg && (
+                  <div
+                    className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    {msg}
+                  </div>
+                )}
               </div>
             )}
 
@@ -328,16 +330,6 @@ export default function TaskDetailsModal({
                     })}
                 </select>
 
-                {/* error banner */}
-                {msg && (
-                  <div
-                    className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
-                    role="alert"
-                    aria-live="polite"
-                  >
-                    {msg}
-                  </div>
-                )}
                 <button
                   type="button"
                   onClick={handleApproveClick}
@@ -356,6 +348,17 @@ export default function TaskDetailsModal({
                 >
                   {busyAction === "reject" ? "Rejecting…" : "Reject Task"}
                 </button>
+
+                {/* error banner */}
+                {msg && (
+                  <div
+                    className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    {msg}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -372,7 +375,7 @@ export default function TaskDetailsModal({
                     {notes.map((n) => (
                       <div key={n.id}>
                         <div className="font-semibold">{n.header}</div>
-                        {n.body && <div className="whitespace-pre-wrap text-gray-700">{n.body}</div>}
+                        {n.body && <div className="whitespace-pre-wrap text-gray-700 break-words">{n.body}</div>}
                       </div>
                     ))}
                   </div>

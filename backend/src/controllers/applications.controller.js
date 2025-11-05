@@ -48,10 +48,10 @@ function mapRow(r) {
     App_endDate: r.App_endDate,
     // Permits (strings in DB → arrays handled by frontend normalizer; returning strings is OK)
     Permit_Create: asStr(r.App_permit_Create),
-    Permit_Open:   asStr(r.App_permit_Open),
-    Permit_ToDo:   asStr(r.App_permit_toDoList),
-    Permit_Doing:  asStr(r.App_permit_Doing),
-    Permit_Done:   asStr(r.App_permit_Done),
+    Permit_Open: asStr(r.App_permit_Open),
+    Permit_ToDo: asStr(r.App_permit_toDoList),
+    Permit_Doing: asStr(r.App_permit_Doing),
+    Permit_Done: asStr(r.App_permit_Done),
     // Computed count
     App_taskCount: Number(r.App_taskCount ?? 0),
   };
@@ -86,22 +86,26 @@ export async function listApplications(req, res, next) {
 export async function createApplication(req, res, next) {
   try {
     const body = req.body || {};
-    const App_Acronym     = asStr(body.App_Acronym).trim();
+    const App_Acronym = asStr(body.App_Acronym).trim();
     const App_Description = asStr(body.App_Description);
-    const App_startDate   = toSQLDate(body.App_startDate); // REQUIRED, normalised
-    const App_endDate     = toSQLDate(body.App_endDate);   // REQUIRED, normalised
+    const App_startDate = toSQLDate(body.App_startDate); // REQUIRED, normalised
+    const App_endDate = toSQLDate(body.App_endDate);   // REQUIRED, normalised
 
     // Normalised CSV permits (all REQUIRED)
-    const App_permit_Create   = normCSV(body.Permit_Create);
-    const App_permit_Open     = normCSV(body.Permit_Open);
+    const App_permit_Create = normCSV(body.Permit_Create);
+    const App_permit_Open = normCSV(body.Permit_Open);
     const App_permit_toDoList = normCSV(body.Permit_ToDo);
-    const App_permit_Doing    = normCSV(body.Permit_Doing);
-    const App_permit_Done     = normCSV(body.Permit_Done);
+    const App_permit_Doing = normCSV(body.Permit_Doing);
+    const App_permit_Done = normCSV(body.Permit_Done);
 
     // ---- Required checks ----
     if (!App_Acronym) {
       return res.status(400).json({ ok: false, message: "App_Acronym is required" });
     }
+    if (App_Acronym.length > 50) {
+      return res.status(400).json({ ok: false, message: "App_Acronym must be between 1-50 characters" });
+    }
+
     if (!App_startDate) {
       return res.status(400).json({ ok: false, message: "App_startDate is required" });
     }
@@ -214,11 +218,11 @@ export async function updateApplication(req, res, next) {
       .some(has);
 
     if (touchingPermits) {
-      const App_permit_Create   = normCSV(body.Permit_Create);
-      const App_permit_Open     = normCSV(body.Permit_Open);
+      const App_permit_Create = normCSV(body.Permit_Create);
+      const App_permit_Open = normCSV(body.Permit_Open);
       const App_permit_toDoList = normCSV(body.Permit_ToDo);
-      const App_permit_Doing    = normCSV(body.Permit_Doing);
-      const App_permit_Done     = normCSV(body.Permit_Done);
+      const App_permit_Doing = normCSV(body.Permit_Doing);
+      const App_permit_Done = normCSV(body.Permit_Done);
 
       sets.push(
         "App_permit_Create = ?",
