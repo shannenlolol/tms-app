@@ -12,28 +12,21 @@ export default function CreateTaskModal({ ...props }) {
     apps = [],
     plans = [],
     canCreate,
-    existingNotes = [],
   } = props;
 
-  if (!open) return null;
-
-  // -------------------- Error banner with timeout (robust) --------------------
-  const [msg, setMsg] = useState(null); // { text: string, key: number } | null
+  const [msg, setMsg] = useState(null); 
   const timerRef = useRef(null);
 
-  // Derive a stable string from `error`
   const errorText =
     typeof error === "string"
       ? error
       : (error && (error.message || error.error || String(error))) || "";
 
-  // Whenever parent supplies a (truthy) error, set a NEW object with a unique key
   useEffect(() => {
     if (!errorText) return;
-    setMsg({ text: errorText, key: Date.now() }); // new key every time, even if text is same
+    setMsg({ text: errorText, key: Date.now() });
   }, [errorText]);
 
-  // Start/refresh the 5s timer whenever the key changes
   useEffect(() => {
     if (!msg) return;
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -49,7 +42,6 @@ export default function CreateTaskModal({ ...props }) {
     };
   }, [msg?.key]);
 
-  // Clear message when modal closes
   useEffect(() => {
     if (!open && msg) setMsg(null);
     return () => {
@@ -64,9 +56,7 @@ export default function CreateTaskModal({ ...props }) {
     if (msg) setMsg(null);
     setValues((prev) => ({ ...prev, [k]: v }));
   };
-  // ---------------------------------------------------------------------------
 
-  // reset plan when app changes
   useEffect(() => {
     setValues((prev) => ({ ...prev, Task_plan: "" }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,7 +67,9 @@ export default function CreateTaskModal({ ...props }) {
   const planOptions = useMemo(
     () =>
       values.Task_app_Acronym
-        ? (plans || []).filter((p) => p.Plan_app_Acronym === values.Task_app_Acronym)
+        ? (plans || []).filter(
+            (p) => p.Plan_app_Acronym === values.Task_app_Acronym
+          )
         : [],
     [plans, values.Task_app_Acronym]
   );
@@ -86,7 +78,7 @@ export default function CreateTaskModal({ ...props }) {
     if (!d) return "—";
     const x = new Date(d);
     if (Number.isNaN(+x)) return String(d);
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`;
   };
 
@@ -94,6 +86,8 @@ export default function CreateTaskModal({ ...props }) {
     !values.Task_app_Acronym ||
     !String(values.Task_name || "").trim() ||
     !canCreate;
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -179,10 +173,10 @@ export default function CreateTaskModal({ ...props }) {
           >
             Create Task
           </button>
-        </div>        '
+        </div>        
         {/* Error banner with timeout */}
         {msg?.text && (
-          <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">
+          <div className="text-sm  mt-2  text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">
             {msg.text}
           </div>
         )}

@@ -1,75 +1,76 @@
 // src/api/client.js
-//  * Preconfigured Axios instance for all API calls.
-//  * Attaches in-memory access token; on 401, calls /auth/refresh and retries queued requests.
+//  * Preconfigured Axios instance (cookie-based auth).
+//  * NO bearer tokens; browser sends HttpOnly cookies automatically.
+//  * On 401 (for non-auth endpoints), call /auth/refresh once and retry queued requests.
 //  * Central place for baseURL and withCredentials.
 
-// src/api/client.js
 import axios from "axios";
 
 export const http = axios.create({
   baseURL: "https://localhost:3000/api",
-  withCredentials: true,
+  withCredentials: true, // <-- send cookies
 });
 
-let ACCESS = null;
-export function setAccessToken(t) { ACCESS = t || null; }
-export function getAccessToken() { return ACCESS; }
+// --- Optional: CSRF for write requests (double-submit cookie pattern) ---
+function readCookie(name) {
+  const m = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[-.$?*|{}()[\]\\/+^]/g, "\\$&")}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]) : undefined;
+}
 
-// Attach bearer to non-refresh requests if we have one
 http.interceptors.request.use((config) => {
-  const url = config.url || "";
-  const isRefresh = url.endsWith("/auth/refresh");
-  if (!isRefresh && ACCESS) {
-    config.headers.Authorization = `Bearer ${ACCESS}`;
+  // Remove any leftover Authorization header usage (paranoia)
+  if (config?.headers?.Authorization) delete config.headers.Authorization;
+
+  // If you implemented a readable CSRF cookie (e.g., "csrf_at"), mirror it in a header for writes.
+  const isWrite = /post|put|patch|delete/i.test(config.method || "");
+  if (isWrite) {
+    const csrf = readCookie("csrf_at");
+    if (csrf) config.headers["x-csrf"] = csrf;
   }
   return config;
 });
 
+// --- 401 → refresh once logic (stampede control) ---
 let isRefreshing = false;
 let waiters = [];
 
-function onRefreshed(newAccess) {
-  waiters.forEach((resolve) => resolve(newAccess));
+function queueWaiter(cb) {
+  waiters.push(cb);
+}
+function resolveWaiters(ok) {
+  waiters.forEach((cb) => cb(ok));
   waiters = [];
 }
 
-function addWaiter(cb) {
-  waiters.push(cb);
-}
-
 const EXCLUDE_401_REFRESH = [
-  "/auth",          
-  "/auth/login",    
+  "/auth",
+  "/auth/login",
   "/auth/refresh",
+  "/logout",
 ];
 
 http.interceptors.response.use(
   (res) => res,
   async (err) => {
     const status = err?.response?.status;
-    const url = err?.config?.url || "";
+    const original = err?.config || {};
+    const url = original?.url || "";
 
-    // 1) Never try to refresh for these endpoints
+    // Never try to refresh for these endpoints
     if (EXCLUDE_401_REFRESH.some((p) => url.endsWith(p))) {
       // mark refresh errors as silent for any global toast layer
-      if (url.endsWith("/auth/refresh") && status === 401) {
-        err._silent = true;
-      }
+      if (url.endsWith("/auth/refresh") && status === 401) err._silent = true;
       return Promise.reject(err);
     }
 
-    // 2) Only attempt refresh if we actually have an access token already
-    //    (i.e., user was logged in). On the login page there won’t be one.
-    if (status === 401 && getAccessToken()) {
-      const original = err.config;
-
-      // If a refresh is in-flight, queue this request until it finishes
+    // Only attempt a refresh on 401, and avoid infinite loops
+    if (status === 401 && !original.__isRetry) {
       if (isRefreshing) {
+        // Wait for the in-flight refresh to complete, then retry if it succeeded
         return new Promise((resolve, reject) => {
-          addWaiter((newAccess) => {
-            if (!newAccess) return reject(err);
-            original.headers = { ...(original.headers || {}), Authorization: `Bearer ${newAccess}` };
-            resolve(http(original));
+          queueWaiter((ok) => {
+            if (!ok) return reject(err);
+            resolve(http({ ...original, __isRetry: true }));
           });
         });
       }
@@ -77,34 +78,28 @@ http.interceptors.response.use(
       // Start a refresh
       isRefreshing = true;
       try {
-        const { data, status: s } = await http.get("/auth/refresh", {
-          // Use base client but avoid recursive interceptor issues:
-          // NOTE: because this is the same instance, we exclude via the EXCLUDE list above.
+        const resp = await http.get("/auth/refresh", {
+          // Same instance is OK because we exclude it above
           withCredentials: true,
-          validateStatus: (st) => (st >= 200 && st < 300) || st === 401,
+          validateStatus: (s) => (s >= 200 && s < 300) || s === 401,
         });
 
-        const newAccess = s === 401 ? null : data?.accessToken || null;
-        if (newAccess) {
-          setAccessToken(newAccess);
-          onRefreshed(newAccess);
-          // retry original request with new token
-          original.headers = { ...(original.headers || {}), Authorization: `Bearer ${newAccess}` };
-          return http(original);
-        } else {
-          // refresh failed — propagate 401
-          onRefreshed(null);
-          return Promise.reject(err);
+        const ok = resp.status >= 200 && resp.status < 300;
+        resolveWaiters(ok);
+        if (ok) {
+          // "at" cookie is renewed server-side; retry original without any header tweaks
+          return http({ ...original, __isRetry: true });
         }
+        // Refresh failed → propagate the original 401
+        return Promise.reject(err);
       } finally {
         isRefreshing = false;
       }
     }
 
-    // 3) For any other case, just bubble up
+    // Otherwise, bubble up
     return Promise.reject(err);
   }
 );
-
 
 export default http;

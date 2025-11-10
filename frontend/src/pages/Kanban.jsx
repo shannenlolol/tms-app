@@ -8,6 +8,7 @@ import CreateTaskModal from "../components/CreateTaskModal";
 import TaskDetailsModal from "../components/TaskDetailsModal";
 import { getPlans, createPlan } from "../api/plans";
 import CreatePlanModal from "../components/CreatePlanModal";
+import axios from "axios";
 
 const COLUMNS = ["Open", "To-Do", "Doing", "Done", "Closed"];
 const STATE_MAP = {
@@ -40,7 +41,20 @@ const fmt = (d) => {
   if (!d) return "—";
   const x = new Date(d);
   if (Number.isNaN(+x)) return String(d);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   return `${x.getDate()} ${months[x.getMonth()]} ${x.getFullYear()}`;
 };
 
@@ -136,7 +150,6 @@ export default function Kanban() {
     );
   }, [apps, values.Task_app_Acronym]);
 
-
   // Permission for Create Task (based on selected app)
   useEffect(() => {
     let cancelled = false;
@@ -181,7 +194,7 @@ export default function Kanban() {
   // ======== details modal helpers ========
   // Build a quick lookup: plan name -> plan object
   const planByName = useMemo(
-    () => new Map((plans || []).map(p => [p.Plan_MVP_name, p])),
+    () => new Map((plans || []).map((p) => [p.Plan_MVP_name, p])),
     [plans]
   );
   const openDetails = async (t) => {
@@ -191,7 +204,9 @@ export default function Kanban() {
     try {
       const list = await getPlans();
       const all = Array.isArray(list) ? list : [];
-      setActivePlans(all.filter(p => p.Plan_app_Acronym === t.Task_app_Acronym));
+      setActivePlans(
+        all.filter((p) => p.Plan_app_Acronym === t.Task_app_Acronym)
+      );
     } catch {
       setActivePlans([]);
     }
@@ -211,12 +226,19 @@ export default function Kanban() {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    const doingGroups = String(permitDoingCSV).split(",").map(s => s.trim()).filter(Boolean);
-    const doneGroups = String(permitDoneCSV).split(",").map(s => s.trim()).filter(Boolean);
+    const doingGroups = String(permitDoingCSV)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const doneGroups = String(permitDoneCSV)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     const username = String(user?.username || "").trim();
     let openAllowed = false,
       todoAllowed = false;
-    let doingAllowed = false, doneAllowed = false;
+    let doingAllowed = false,
+      doneAllowed = false;
     if (username) {
       if (openGroups.length) {
         const checks = await Promise.all(
@@ -230,8 +252,18 @@ export default function Kanban() {
         );
         todoAllowed = checks2.some(Boolean);
       }
-      if (doingGroups.length) { const c = await Promise.all(doingGroups.map(g => checkGroup(username, g))); doingAllowed = c.some(Boolean); }
-      if (doneGroups.length) { const c = await Promise.all(doneGroups.map(g => checkGroup(username, g))); doneAllowed = c.some(Boolean); }
+      if (doingGroups.length) {
+        const c = await Promise.all(
+          doingGroups.map((g) => checkGroup(username, g))
+        );
+        doingAllowed = c.some(Boolean);
+      }
+      if (doneGroups.length) {
+        const c = await Promise.all(
+          doneGroups.map((g) => checkGroup(username, g))
+        );
+        doneAllowed = c.some(Boolean);
+      }
     }
 
     setCanOpenActions(openAllowed);
@@ -274,8 +306,16 @@ export default function Kanban() {
     await updateTask(activeTask.Task_name, { Task_state: "Doing" });
     await refreshAndSync(activeTask.Task_name);
   };
-  const handleDrop = async () => { if (!activeTask) return; await updateTask(activeTask.Task_name, { Task_state: "ToDo" }); await refreshAndSync(activeTask.Task_name); };
-  const handleReview = async () => { if (!activeTask) return; await updateTask(activeTask.Task_name, { Task_state: "Done" }); await refreshAndSync(activeTask.Task_name); };
+  const handleDrop = async () => {
+    if (!activeTask) return;
+    await updateTask(activeTask.Task_name, { Task_state: "ToDo" });
+    await refreshAndSync(activeTask.Task_name);
+  };
+  const handleReview = async () => {
+    if (!activeTask) return;
+    await updateTask(activeTask.Task_name, { Task_state: "Done" });
+    await refreshAndSync(activeTask.Task_name);
+  };
   const handleApprove = async () => {
     if (!activeTask) return;
     await updateTask(activeTask.Task_name, { Task_state: "Closed" }); // Done -> Closed
@@ -284,7 +324,7 @@ export default function Kanban() {
 
   const handleReject = async () => {
     if (!activeTask) return;
-    await updateTask(activeTask.Task_name, { Task_state: "Doing" });  // Done -> Doing
+    await updateTask(activeTask.Task_name, { Task_state: "Doing" }); // Done -> Doing
     await refreshAndSync(activeTask.Task_name);
   };
   // ======== UI helpers ========
@@ -307,7 +347,9 @@ export default function Kanban() {
       >
         {/* Title */}
         <div className="text-base text-gray-900">
-          <span className="font-semibold">{t.Task_id} : {t.Task_name}</span>
+          <span className="font-semibold">
+            {t.Task_id} : {t.Task_name}
+          </span>
         </div>
 
         {/* Plan chip */}
@@ -319,19 +361,14 @@ export default function Kanban() {
 
         {/* Date range */}
         {range ? (
-          <div className="mt-1 text-xs text-gray-600">
-            {range}
-          </div>
+          <div className="mt-1 text-xs text-gray-600">{range}</div>
         ) : null}
 
         {/* Footer meta */}
-        <div className="mt-3 text-xs text-gray-500">
-          Created by: {creator}
-        </div>
+        <div className="mt-3 text-xs text-gray-500">Created by: {creator}</div>
       </button>
     );
   }
-
 
   if (!ready) return null;
   if (!isAuthenticated) return <div className="p-6">Please sign in.</div>;
@@ -360,10 +397,12 @@ export default function Kanban() {
       setPmErr("");
       const list = await getPlans();
       const all = Array.isArray(list) ? list : [];
-      setPlans(all);                    // <-- refresh global plans (used by CreateTaskModal)
+      setPlans(all); // <-- refresh global plans (used by CreateTaskModal)
       // if the details modal is open, refresh the filtered list for that task too
       if (activeTask) {
-        setActivePlans(all.filter(p => p.Plan_app_Acronym === activeTask.Task_app_Acronym));
+        setActivePlans(
+          all.filter((p) => p.Plan_app_Acronym === activeTask.Task_app_Acronym)
+        );
       }
     } catch (e) {
       const m =
@@ -375,6 +414,98 @@ export default function Kanban() {
       setPmErr(m);
     }
   };
+
+  async function getTaskByState(taskState) {
+
+    const url =
+      `https://localhost:3000/api/tasks/GetTaskByState/` +
+      encodeURIComponent(taskState);
+    try {
+      const res = await axios.get(url, {
+        withCredentials: true,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      });
+      return res.data;
+    } catch (e) {
+      const code = e?.response?.data?.status;
+      const http = e?.response?.status;
+      let msg;
+      switch (code) {
+        case "U_1":
+          msg = "Malformed URL/URI";
+          break;
+        case "IAM_1":
+          msg = "Invalid Credentials";
+          break;
+        case "P_1":
+          msg = "Task_state invalid";
+          break;
+        case "UE":
+          msg = "Unspecified Error";
+          break;
+        default:
+          msg =
+            e?.response?.data?.message ||
+            e?.message ||
+            `Request failed${http ? ` (${http})` : ""}`;
+      }
+      const err = new Error(msg);
+      err.code = code;
+      err.status = http;
+      err.data = e?.response?.data;
+      throw err;
+    }
+  }
+
+  async function promoteTaskToDone(taskID) {
+    const url =
+      `https://localhost:3000/api/tasks/` +
+      `${encodeURIComponent(taskID)}/PromoteTask2Done`;
+    try {
+      const res = await axios.post(url, null, {
+        withCredentials: true,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      });
+      return res.data; 
+    } catch (e) {
+      const code = e?.response?.data?.status;
+      let msg;
+      switch (code) {
+        case "U_1":
+          msg = "Malformed URL/URI";
+          break;
+        case "IAM_1":
+          msg = "Invalid Credentials\nJWT is not valid";
+          break;
+        case "IAM_2":
+          msg =
+            'Not authorized\nUser does not have usergroup under "App_permit_Create"';
+          break;
+        case "TR_1":
+          msg = "Task not found";
+          break;
+        case "TR_2":
+          msg = 'Task not in "Doing" State';
+          break;
+        case "UE":
+          msg = "Unspecified Error";
+          break;
+        default:
+          msg = e?.response?.data?.message || e?.message || "Request failed";
+      }
+      const err = new Error(msg);
+      err.code = code;
+      err.status = e?.response?.status;
+      err.data = e?.response?.data;
+      throw err;
+    }
+  }
 
   const submitTask = async () => {
     if (!values.Task_app_Acronym) {
@@ -389,24 +520,65 @@ export default function Kanban() {
       setErr("Not permitted to create tasks for this application.");
       return;
     }
+
+    const payload = {
+      Task_app_Acronym: values.Task_app_Acronym,
+      Task_name: values.Task_name,
+      Task_description: values.Task_description || "",
+      Task_plan: values.Task_plan || "",
+    };
+
     try {
-      await createTask({
-        Task_app_Acronym: values.Task_app_Acronym,
-        Task_name: values.Task_name.trim(),
-        Task_description: values.Task_description || "",
-        Task_plan: values.Task_plan || undefined,
-        Task_notes: values.Task_notes || null,
+      await axios.post("https://localhost:3000/api/tasks/CreateTask", payload, {
+        withCredentials: true,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
       });
       closeCreateTaskModal();
-      await fetchTasks(); // refresh so the new task appears in Open
+      await fetchTasks();
     } catch (e) {
-      const m =
-        (typeof e?.response?.data === "string"
-          ? e.response.data
-          : e?.response?.data?.message) ||
-        e?.message ||
-        "Create task failed";
-      setErr(m);
+      const code = e?.response?.data?.status;
+      const http = e?.response?.status;
+      let msg;
+      switch (code) {
+        case "U_1":
+          msg = "Malformed URL/URI";
+          break;
+        case "P_1":
+          msg =
+            "Wrong content type (accepts JSON, but receives other content types)";
+          break;
+        case "P_2":
+          msg = "Missing required fields";
+          break;
+        case "P_3":
+          msg = "Task_Name invalid";
+          break;
+        case "P_4":
+          msg = "Task_Description invalid";
+          break;
+        case "IAM_1":
+          msg = "Invalid Credentials";
+          break;
+        case "IAM_2":
+          msg = "Not authorised";
+          break;
+        case "TR_1":
+          msg = "App not found";
+          break;
+        case "TR_2":
+          msg = "Task_Plan not found";
+          break;
+        case "UE":
+          msg = "Unspecified Error";
+          break;
+        default:
+          msg =
+            e?.response?.data?.message || e?.message || "Create task failed";
+      }
+      setErr(msg);
     }
   };
 
@@ -462,10 +634,11 @@ export default function Kanban() {
                   type="button"
                   onClick={openCreateTaskModal}
                   aria-disabled={col !== "Open"}
-                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm transition ${col === "Open"
-                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                    : "invisible pointer-events-none select-none"
-                    }`}
+                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm transition ${
+                    col === "Open"
+                      ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                      : "invisible pointer-events-none select-none"
+                  }`}
                 >
                   <span className="text-base leading-none">＋</span>
                   <span>Add Task</span>
@@ -503,7 +676,11 @@ export default function Kanban() {
         onClose={closeDetails}
         onAppendNote={async (text) => {
           if (!activeTask) return;
-          await appendTaskNote(activeTask.Task_name, text, activeTask.Task_state);
+          await appendTaskNote(
+            activeTask.Task_name,
+            text,
+            activeTask.Task_state
+          );
           await refreshAndSync(activeTask.Task_name);
         }}
         planOptions={activePlans}
@@ -522,7 +699,10 @@ export default function Kanban() {
 
       <CreatePlanModal
         open={pmModalOpen}
-        onClose={() => { setPmModalOpen(false); setPmErr(""); }}
+        onClose={() => {
+          setPmModalOpen(false);
+          setPmErr("");
+        }}
         onSubmit={submitNewPlan}
         error={pmErr}
         apps={apps}

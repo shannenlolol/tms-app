@@ -1,15 +1,20 @@
 /* controllers/auth.controller.js
- * Login verifies bcrypt hash, issues access token + sets refresh cookie; refresh mints a new access from the cookie.
- * Also supports logout (clears cookie) and check (echoes authenticated user).
+ * Login verifies bcrypt hash, issues access token cookie + sets refresh cookie;
+ * /refresh mints a new access token cookie from the refresh cookie.
+ * Also supports logout (clears both cookies) and check (echoes authenticated user).
  */
 
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import pool from "../models/db.js";
-import { makeAccessToken, makeRefreshToken, setRefreshCookie } from "../middleware/jwt.js";
-
-// tiny helper: DB CSV/string -> array
-const toArray = (v) => String(v ?? "").split(",").map(s => s.trim()).filter(Boolean);
+import {
+  makeAccessToken,
+  makeRefreshToken,
+  setRefreshCookie,
+  setAccessCookie,
+  clearAccessCookie,
+  clearRefreshCookie,
+} from "../middleware/jwt.js";
 
 /** POST /api/auth  { username, password } */
 export const login = async (req, res, next) => {
@@ -32,7 +37,7 @@ export const login = async (req, res, next) => {
     if (rows.length === 0) {
       return res.status(401).json({ ok: false, message: "Invalid Username and/or Password" });
     }
-
+    
 
     const user = rows[0];
     const ok = await bcrypt.compare(password, user.password_hash);
@@ -45,14 +50,17 @@ export const login = async (req, res, next) => {
     const ua = req.headers["user-agent"] || "";
     const ip = req.ip;
 
+    // Mint tokens
     const accessToken = makeAccessToken(user, { ua, ip });
     const refreshToken = makeRefreshToken({ username: user.username });
 
+    // Set cookies (HttpOnly). Access cookie replaces Authorization header usage.
+    setAccessCookie(res, accessToken);
     setRefreshCookie(res, refreshToken);
 
+    // Return minimal body (no tokens in JSON)
     return res.json({
       ok: true,
-      accessToken,
       user: { username: user.username },
     });
   } catch (err) {
@@ -69,35 +77,40 @@ export const refresh = (req, res) => {
   }
   try {
     const now = new Date();
-    console.log(`verify refresh token in cookie to make access token: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+    console.log(
+      `verify refresh token in cookie to make access token: ${now.toISOString()} (unix ${Math.floor(
+        now.getTime() / 1000
+      )})`
+    );
     const payload = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET);
     const ua = req.headers["user-agent"] || "";
     const ip = req.ip;
     const newAT = makeAccessToken({ username: payload.username }, { ua, ip });
-    res.json({ ok: true, accessToken: newAT });
-  }catch {
+    // Set/overwrite the access cookie; do not return token in body
+    setAccessCookie(res, newAT);
+    return res.json({ ok: true });
+  } catch {
     return res.status(401).json({ ok: false, message: "Invalid or expired refresh token" });
   }
 };
 
 /** POST /api/logout */
 export async function logout(_req, res) {
-  // MUST match the cookie attributes you used when setting it!
-  res.clearCookie("rt", {
-    httpOnly: true,
-    secure: true,         // because you're on https://localhost
-    sameSite: "none",     // cross-site (5173 <-> 3000)
-    path: "/api/auth/refresh", // EXACT same path used when setting the cookie
-  });
+  // Clear both cookies; attributes must match those used when setting them.
+  clearAccessCookie(res);
+  clearRefreshCookie(res);
+
   const now = new Date();
-  console.log(`5refresh cookie cleared at authcontroller: ${now.toISOString()} (unix ${Math.floor(now.getTime() / 1000)})`);
+  console.log(
+    `5cookies cleared at authcontroller: ${now.toISOString()} (unix ${Math.floor(
+      now.getTime() / 1000
+    )})`
+  );
 
   return res.sendStatus(204); // no content
 }
 
-
-/** GET /api/check  (optional) */
+/** GET /api/check  (protected by ensureAuth; simply echoes back) */
 export const check = (req, res) => {
-  // With JWT, check should be behind ensureAuth; simply echoes back
   return res.json({ ok: true, user: req.user });
 };

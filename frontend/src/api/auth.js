@@ -1,36 +1,24 @@
-// src/api/auth.js
-//  * Authentication helpers: login, session check, logout; refresh via HttpOnly cookie.
-//  * Endpoints: POST /auth/login, GET /auth/session, POST /auth/logout.
-//  * Stores access token in memory (not localStorage).
+// src/api/auth.js (cookie-based)
+import axios from "./client";
 
-import http, { setAccessToken } from "./client";
-
-// POST /api/auth  -> { accessToken, user }
+// POST /api/auth/login  -> { ok, user }
 export async function login(username, password) {
-  const { data } = await http.post("/auth/login", { username, password });
-  setAccessToken(data?.accessToken || null);
-  return data?.user || null;
+  const { data } = await axios.post("/auth/login", { username, password });
+  return data?.user || null; // cookies carry auth
 }
 
-// GET /api/check -> profile | 401
+// GET /api/auth/check -> user | null
 export async function check() {
   try {
-    // IMPORTANT: use `http`, and don't prefix with /api because baseURL already has it
-    const { data } = await http.get("/auth/check");
+    const { data } = await axios.get("/auth/check");
     return data?.user ?? data ?? null;
   } catch (e) {
-    if (e?.response?.status === 401) return null; // unauthenticated is not an exception
+    if (e?.response?.status === 401) return null;
     throw e;
   }
 }
 
-// POST /api/auth/logout (adjust if your backend route is different)
+// POST /api/auth/logout -> 204
 export async function logout() {
-  try {
-    // clear refresh cookie server-side
-    await http.post("/auth/logout", null, { withCredentials: true });
-  } finally {
-    // always drop access token locally
-    setAccessToken(null);
-  }
+  await axios.post("/auth/logout", null);
 }

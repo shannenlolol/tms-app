@@ -1,22 +1,15 @@
 // src/hooks/useAuth.js
 /**
- * Auth context/provider.
- * Keeps session state (`user`, `ready`) and flags (`isAuthenticated`/`isAuthed`).
- * Boot: skip on /login; otherwise call /auth/refresh (withCredentials), store access token,
- * then fetch full user; always set `ready=true` at the end.
- * Tokens: access token kept in memory via setAccessToken; refresh token is HttpOnly cookie.
- * Actions: login (refresh + load user), logout (clear token/user), reloadUser (re-fetch or clear).
- * `bootOnce` prevents double boot in Strict Mode/HMR; inactive users (active=0/false) aren’t authed.
- *
- * Fixes added:
- *  - Handle 403 { code: "ACCOUNT_DISABLED" } on refresh / current / any API via interceptor.
- *  - Clear token + user immediately on disabled so ProtectedRoutes sends to /login.
+ * Auth context/provider (cookie-based).
+ * - No bearer tokens are stored client-side; browser sends HttpOnly cookies.
+ * - Boot: on non-/login routes, call /auth/refresh (to mint access cookie), then load user.
+ * - ready gate: only redirect when ready === true and !isAuthenticated.
+ * - Global interceptor: if backend returns { code: "ACCOUNT_DISABLED" } with 403, force logout.
  */
 
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
-import { login as apiLogin, logout as apiLogout, check } from "../api/auth";
-import { getAccessToken, setAccessToken } from "../api/client";
+import http from "../api/client";                  // axios instance with baseURL + withCredentials
+import { login as apiLogin, logout as apiLogout } from "../api/auth";
 import { getCurrentUser } from "../api/users";
 
 const AuthCtx = createContext(null);
@@ -38,16 +31,15 @@ export function AuthProvider({ children }) {
     try {
       await apiLogout().catch(() => {});
     } finally {
-      setAccessToken(null);
       setUser(null);
-      // Do not navigate here; your route guards will redirect to /login when they see !isAuthenticated
+      // Route guards should handle redirect when they see !isAuthenticated
     }
   }
 
-  // Global interceptor to catch disabled accounts on ANY request after hydration
+  // Intercept responses on the API client (not the global axios) to catch disabled accounts
   useEffect(() => {
     if (interceptorIdRef.current != null) return;
-    const id = axios.interceptors.response.use(
+    const id = http.interceptors.response.use(
       (res) => res,
       async (error) => {
         if (isDisabledError(error) && !tearingDownRef.current) {
@@ -64,7 +56,7 @@ export function AuthProvider({ children }) {
     interceptorIdRef.current = id;
     return () => {
       if (interceptorIdRef.current != null) {
-        axios.interceptors.response.eject(interceptorIdRef.current);
+        http.interceptors.response.eject(interceptorIdRef.current);
         interceptorIdRef.current = null;
       }
     };
@@ -75,8 +67,7 @@ export function AuthProvider({ children }) {
     bootOnce.current = true;
 
     const isLoginRoute =
-      typeof window !== "undefined" &&
-      window.location.pathname.startsWith("/login");
+      typeof window !== "undefined" && window.location.pathname.startsWith("/login");
 
     if (isLoginRoute) {
       setReady(true);
@@ -85,46 +76,26 @@ export function AuthProvider({ children }) {
 
     (async () => {
       try {
-        // Try to refresh; allow non-2xx so we can inspect error body
-        let token = null;
-        try {
-          const { data } = await axios.get(
-            "https://localhost:3000/api/auth/refresh",
-            {
-              withCredentials: true,
-              validateStatus: () => true, // we'll handle statuses ourselves
-            }
-          );
-          if (data?.accessToken) {
-            token = data.accessToken;
-            setAccessToken(token);
-          } else if (data?.code === "ACCOUNT_DISABLED") {
-            await forceLogout();
-            return;
-          }
-        } catch (e) {
-          if (isDisabledError(e)) {
-            await forceLogout();
-            return;
-          }
-          // No refresh available -> anonymous
-          setAccessToken(null);
+        // 1) Try to mint/refresh access cookie from refresh cookie.
+        const refreshRes = await http.get("/auth/refresh", {
+          // allow 401 without throwing; we'll treat it as anonymous
+          validateStatus: (s) => (s >= 200 && s < 300) || s === 401 || s === 403,
+        });
+
+        if (refreshRes.status === 403 && refreshRes.data?.code === "ACCOUNT_DISABLED") {
+          await forceLogout();
+          return;
+        }
+        if (refreshRes.status === 401) {
+          // no refresh available -> anonymous session
           setUser(null);
           return;
         }
 
-        // If no token, stay anonymous
-        if (!token) {
-          setAccessToken(null);
-          setUser(null);
-          return;
-        }
-
-        // Validate token & load full user
+        // 2) Load the current user (protected; will include access cookie automatically)
         try {
-          await check();
           const fullUser = await getCurrentUser();
-          // If backend ever returns an "active" flag and it's false, also logout:
+          // If your /users/current returns an 'active' flag and it's 0, treat as disabled
           if (fullUser && fullUser.active === 0) {
             await forceLogout();
             return;
@@ -135,8 +106,7 @@ export function AuthProvider({ children }) {
             await forceLogout();
             return;
           }
-          // Any other failure -> treat as anonymous
-          setAccessToken(null);
+          // Any other failure -> anonymous
           setUser(null);
         }
       } finally {
@@ -156,29 +126,25 @@ export function AuthProvider({ children }) {
       isAuthed: isAuthenticated,
 
       async login(username, password) {
-        // 1) Login
-        const res = await apiLogin(username, password).catch(async (e) => {
+        // 1) Perform login — server sets rt + at cookies
+        await apiLogin(username, password).catch(async (e) => {
           if (isDisabledError(e)) {
             await forceLogout();
             throw new Error("Your account is disabled. Please contact an administrator.");
           }
           throw e;
         });
-        const token = res?.accessToken ?? res?.data?.accessToken;
-        if (token) setAccessToken(token);
 
-        // 2) Refresh (optional harden)
+        // 2) Optionally renew access cookie (defensive; usually already set by login)
         setReady(false);
         try {
-          const r = await axios.get("https://localhost:3000/api/auth/refresh", {
-            withCredentials: true,
-            validateStatus: () => true,
+          const r = await http.get("/auth/refresh", {
+            validateStatus: (s) => (s >= 200 && s < 300) || s === 401 || s === 403,
           });
-          if (r?.data?.code === "ACCOUNT_DISABLED") {
+          if (r.status === 403 && r.data?.code === "ACCOUNT_DISABLED") {
             await forceLogout();
             throw new Error("Your account is disabled. Please contact an administrator.");
           }
-          if (r?.data?.accessToken) setAccessToken(r.data.accessToken);
 
           // 3) Load user
           const fullUser = await getCurrentUser().catch(async (e) => {
@@ -188,12 +154,10 @@ export function AuthProvider({ children }) {
             }
             throw e;
           });
-
           if (fullUser && fullUser.active === 0) {
             await forceLogout();
             throw new Error("Your account is disabled. Please contact an administrator.");
           }
-
           setUser(fullUser);
           return fullUser;
         } finally {
@@ -209,10 +173,6 @@ export function AuthProvider({ children }) {
       async reloadUser({ silent = true } = {}) {
         if (!silent) setReady(false);
         try {
-          if (!getAccessToken()) {
-            setUser(null);
-            return null;
-          }
           const fullUser = await getCurrentUser().catch(async (e) => {
             if (isDisabledError(e)) {
               await forceLogout();
@@ -226,6 +186,9 @@ export function AuthProvider({ children }) {
           }
           setUser(fullUser);
           return fullUser;
+        } catch {
+          setUser(null);
+          return null;
         } finally {
           if (!silent) setReady(true);
         }

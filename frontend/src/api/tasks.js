@@ -9,7 +9,7 @@ export const getTasks = async (params) =>
   (await http.get("/tasks", { params })).data;
 
 export const createTask = async (payload) =>
-  (await http.post("/tasks", payload)).data;
+  (await http.post("/tasks/CreateTask", payload)).data;
 
 export const appendTaskNote = async (taskName, entry, taskState) =>
   (await http.post(`/tasks/${encodeURIComponent(taskName)}/notes`, { entry, taskState })).data;

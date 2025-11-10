@@ -70,4 +70,4 @@ app.use("/api/plans", plansRoutes);
 app.use("/api/tasks", tasksRoutes);
 
 // 404
-app.use((req, res) => res.status(404).json({ error: "Not found" }));
+app.use((req, res) => res.status(404).json({ status: "U_1" }));

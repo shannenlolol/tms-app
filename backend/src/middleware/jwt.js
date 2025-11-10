@@ -6,12 +6,27 @@ import pool from "../models/db.js";
 const getUA = (req) => req.headers["user-agent"] || "";
 const getIP = (req) => req.ip; // respects app.set('trust proxy', 1)
 
-/** Signers */
+/** ---- Cookie names & options ---- */
+const ACCESS_COOKIE = "at"; // access token cookie name
+const REFRESH_COOKIE = "rt"; // already used in your code
+
+// 15 minutes default (match your ACCESS_TOKEN_TTL if set)
+const ACCESS_MAX_AGE_MS =
+  (process.env.ACCESS_TOKEN_TTL_MINUTES
+    ? Number(process.env.ACCESS_TOKEN_TTL_MINUTES)
+    : null) * 60_000 || 15 * 60_000;
+
+/**
+ * Cross-site SPA? Use SameSite=None + Secure.
+ * Same-site (API & SPA on same origin)? You may use Lax and keep Secure in prod.
+ */
+const sameSiteForAPIs = process.env.SAMESITE_COOKIES || "none"; // "none" | "lax" | "strict"
+const secureCookies = process.env.NODE_ENV !== "development";   // true in prod
+
+/** Signers (unchanged) */
 export function makeAccessToken(user, { ua, ip }) {
   const now = new Date();
   console.log(`1access token made: ${now.toISOString()} (unix ${Math.floor(now.getTime()/1000)})`);
-
-  // Embed ua/ip ONLY in the access token
   return jwt.sign(
     { username: user.username, ua, ip, type: "access" },
     process.env.ACCESS_TOKEN_SECRET,
@@ -22,8 +37,6 @@ export function makeAccessToken(user, { ua, ip }) {
 export function makeRefreshToken(user) {
   const now = new Date();
   console.log(`2refresh token made: ${now.toISOString()} (unix ${Math.floor(now.getTime()/1000)})`);
-
-  // Keep refresh token minimal; do NOT include ua/ip
   return jwt.sign(
     { username: user.username, type: "refresh" },
     process.env.REFRESH_TOKEN_SECRET,
@@ -31,19 +44,68 @@ export function makeRefreshToken(user) {
   );
 }
 
-/** Auth guard for access-token–protected routes */
+/** ---- Set/Clear cookies ---- */
+export function setAccessCookie(res, accessToken) {
+  const now = new Date();
+  console.log(`access cookie set: ${now.toISOString()} (unix ${Math.floor(now.getTime()/1000)})`);
+  res.cookie(ACCESS_COOKIE, accessToken, {
+    httpOnly: true,
+    secure: secureCookies,
+    sameSite: sameSiteForAPIs,     // "none" if cross-site
+    path: "/api",                  // scope to your API only
+    maxAge: ACCESS_MAX_AGE_MS
+  });
+}
+
+export function clearAccessCookie(res) {
+  res.clearCookie(ACCESS_COOKIE, {
+    httpOnly: true,
+    secure: secureCookies,
+    sameSite: sameSiteForAPIs,
+    path: "/api"
+  });
+}
+
+/** Existing refresh cookie function (kept) */
+export function setRefreshCookie(res, refreshToken) {
+  const now = new Date();
+  console.log(`3refresh cookie made: ${now.toISOString()} (unix ${Math.floor(now.getTime()/1000)})`);
+  res.cookie(REFRESH_COOKIE, refreshToken, {
+    httpOnly: true,
+    secure: secureCookies,
+    sameSite: sameSiteForAPIs,
+    path: "/api/auth/refresh",
+    maxAge: 1000 * 60 * 60 * 24 * 7
+  });
+}
+export function clearRefreshCookie(res) {
+  res.clearCookie(REFRESH_COOKIE, {
+    httpOnly: true,
+    secure: secureCookies,
+    sameSite: sameSiteForAPIs,
+    path: "/api/auth/refresh"
+  });
+}
+
+/** ---- Auth guard now reads from cookie instead of Authorization header ---- */
 export async function ensureAuth(req, res, next) {
-  const auth = req.headers.authorization || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) return res.status(401).json({ message: "Missing Authorization Bearer token" });
+  // Prefer cookie. (Optionally fall back to header to ease migration.)
+  const cookieToken = req.cookies?.[ACCESS_COOKIE];
+  const headerAuth = req.headers.authorization || "";
+  const headerToken = headerAuth.startsWith("Bearer ") ? headerAuth.slice(7) : null;
+  const token = cookieToken || headerToken;
+
+  if (!token) {
+    return res.status(401).json({ status: "IAM_1" });
+  }
 
   try {
     const payload = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     const username = String(payload?.username || "").trim().toLowerCase();
-    if (!username) return res.status(401).json({ message: "Invalid access token" });
+    if (!username) return res.status(401).json({ status:  "IAM_1" });
 
     // --- OPTIONAL: UA/IP binding check ---
-    const STRICT = process.env.STRICT_UA_IP === "1"; // set to "1" to hard-fail
+    const STRICT = process.env.STRICT_UA_IP === "1";
     const curUA = getUA(req);
     const curIP = getIP(req);
 
@@ -74,20 +136,6 @@ export async function ensureAuth(req, res, next) {
     req.user = { username };
     next();
   } catch {
-    return res.status(401).json({ message: "Invalid or expired access token" });
+    return res.status(401).json({ status: "IAM_1" });
   }
-}
-
-/** HttpOnly refresh cookie */
-export function setRefreshCookie(res, refreshToken) {
-  const now = new Date();
-  console.log(`3refresh cookie made: ${now.toISOString()} (unix ${Math.floor(now.getTime()/1000)})`);
-
-  res.cookie("rt", refreshToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    path: "/api/auth/refresh",
-    maxAge: 1000 * 60 * 60 * 24 * 7
-  });
 }
