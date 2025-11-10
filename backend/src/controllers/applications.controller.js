@@ -11,6 +11,27 @@ import pool from "../models/db.js";
 
 const asStr = (v) => (v == null ? "" : String(v));
 
+async function isUserInGroup(username, groupName) {
+  console.log("hii", username, groupName);
+  const uname = String(username || "").trim().toLowerCase();
+  const gname = String(groupName || "").trim().toLowerCase();
+  if (!uname || !gname) return false;
+
+  const [[row]] = await pool.query(
+    "SELECT usergroups FROM accounts WHERE username = ? LIMIT 1",
+    [uname]
+  );
+  if (!row) return false;
+
+  const groups = String(row.usergroups || "")
+    .split(",")
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  return groups.includes(gname);
+}
+
+
 /** Convert various inputs (Date, ISO, 'YYYY-MM-DD') to 'YYYY-MM-DD' or null if empty/invalid */
 function toSQLDate(value) {
   const s = asStr(value).trim();
@@ -85,6 +106,8 @@ export async function listApplications(req, res, next) {
 
 export async function createApplication(req, res, next) {
   try {
+    const username = String(req.user?.username || "").trim();
+    if (!username) return res.status(401).json({ ok: false, message: "Unauthorised" });
     const body = req.body || {};
     const App_Acronym = asStr(body.App_Acronym).trim();
     const App_Description = asStr(body.App_Description);
@@ -126,7 +149,11 @@ export async function createApplication(req, res, next) {
     if (exist.length) {
       return res.status(409).json({ ok: false, message: "App_Acronym already exists" });
     }
-
+    const allowed = await isUserInGroup(username, "project lead");
+    console.log("allowed", allowed);
+    if (!allowed) {
+      return res.status(403).json({ ok: false, message: "Not permitted. Your privileges/account status has changed; please refresh." });
+    }
     // INSERT
     await pool.query(
       `INSERT INTO application
@@ -167,6 +194,8 @@ export async function createApplication(req, res, next) {
 
 export async function updateApplication(req, res, next) {
   try {
+    const username = String(req.user?.username || "").trim();
+    if (!username) return res.status(401).json({ ok: false, message: "Unauthorised" });
     const paramAcr = asStr(req.params.acronym).trim();
     if (!paramAcr) {
       return res.status(400).json({ ok: false, message: "Acronym param is required" });
@@ -247,6 +276,11 @@ export async function updateApplication(req, res, next) {
 
     params.push(paramAcr);
 
+    const allowed = await isUserInGroup(username, "project lead");
+    console.log("allowed", allowed);
+    if (!allowed) {
+      return res.status(403).json({ ok: false, message: "Not permitted. Your privileges/account status has changed; please refresh." });
+    }
     const [result] = await pool.query(
       `UPDATE application SET ${sets.join(", ")} WHERE App_Acronym = ?`,
       params
