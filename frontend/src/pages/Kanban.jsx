@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { getApplications } from "../api/applications";
-import { getTasks, createTask, appendTaskNote, updateTask } from "../api/tasks";
+import { getTasks, appendTaskNote, updateTask } from "../api/tasks";
 import { checkGroup } from "../api/users";
 import CreateTaskModal from "../components/CreateTaskModal";
 import TaskDetailsModal from "../components/TaskDetailsModal";
@@ -279,11 +279,11 @@ export default function Kanban() {
     setActivePlans([]);
   };
 
-  const refreshAndSync = async (keepName) => {
+  const refreshAndSync = async (Task_id) => {
     const list = await getTasks();
     setTasks(Array.isArray(list) ? list : []);
-    if (keepName) {
-      const updated = list.find((x) => x.Task_name === keepName);
+    if (Task_id) {
+      const updated = list.find((x) => x.Task_id === Task_id);
       if (updated) setActiveTask(updated);
     }
   };
@@ -291,41 +291,41 @@ export default function Kanban() {
   // details actions
   const handleChangePlan = async (newPlan) => {
     if (!activeTask) return;
-    await updateTask(activeTask.Task_name, { Task_plan: newPlan });
-    await refreshAndSync(activeTask.Task_name);
+    await updateTask(activeTask.Task_id, { Task_plan: newPlan });
+    await refreshAndSync(activeTask.Task_id);
   };
 
   const handleRelease = async () => {
     if (!activeTask) return;
-    await updateTask(activeTask.Task_name, { Task_state: "ToDo" });
-    await refreshAndSync(activeTask.Task_name);
+    await updateTask(activeTask.Task_id, { Task_state: "ToDo" });
+    await refreshAndSync(activeTask.Task_id);
   };
 
   const handleTake = async () => {
     if (!activeTask) return;
-    await updateTask(activeTask.Task_name, { Task_state: "Doing" });
-    await refreshAndSync(activeTask.Task_name);
+    await updateTask(activeTask.Task_id, { Task_state: "Doing" });
+    await refreshAndSync(activeTask.Task_id);
   };
   const handleDrop = async () => {
     if (!activeTask) return;
-    await updateTask(activeTask.Task_name, { Task_state: "ToDo" });
-    await refreshAndSync(activeTask.Task_name);
+    await updateTask(activeTask.Task_id, { Task_state: "ToDo" });
+    await refreshAndSync(activeTask.Task_id);
   };
   const handleReview = async () => {
     if (!activeTask) return;
-    await updateTask(activeTask.Task_name, { Task_state: "Done" });
-    await refreshAndSync(activeTask.Task_name);
+    await updateTask(activeTask.Task_id, { Task_state: "Done" });
+    await refreshAndSync(activeTask.Task_id);
   };
   const handleApprove = async () => {
     if (!activeTask) return;
-    await updateTask(activeTask.Task_name, { Task_state: "Closed" }); // Done -> Closed
-    await refreshAndSync(activeTask.Task_name);
+    await updateTask(activeTask.Task_id, { Task_state: "Closed" }); // Done -> Closed
+    await refreshAndSync(activeTask.Task_id);
   };
 
   const handleReject = async () => {
     if (!activeTask) return;
-    await updateTask(activeTask.Task_name, { Task_state: "Doing" }); // Done -> Doing
-    await refreshAndSync(activeTask.Task_name);
+    await updateTask(activeTask.Task_id, { Task_state: "Doing" }); // Done -> Doing
+    await refreshAndSync(activeTask.Task_id);
   };
   // ======== UI helpers ========
 
@@ -677,11 +677,11 @@ export default function Kanban() {
         onAppendNote={async (text) => {
           if (!activeTask) return;
           await appendTaskNote(
-            activeTask.Task_name,
+            activeTask.Task_id,
             text,
             activeTask.Task_state
           );
-          await refreshAndSync(activeTask.Task_name);
+          await refreshAndSync(activeTask.Task_id);
         }}
         planOptions={activePlans}
         canOpenActions={canOpenActions}

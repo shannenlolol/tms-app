@@ -7,14 +7,13 @@ const router = express.Router();
 
 router.get("/", ensureAuth, listTasks);
 
+// Assignment 3-----------------------------
 router.post("/CreateTask", ensureAuth, createTask);
-
-router.post("/:taskName/notes", ensureAuth, appendTaskNote);
-
-router.patch("/:taskName", ensureAuth, updateTask);
-
 router.get("/GetTaskByState/:state", ensureAuth, getTasksByState);
-
 router.post("/:taskID/PromoteTask2Done", ensureAuth, promoteTaskToDone);
+// -----------------------------------------
+
+router.post("/:taskID/notes", ensureAuth, appendTaskNote);
+router.patch("/:taskID", ensureAuth, updateTask);
 
 export default router;

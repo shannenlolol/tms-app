@@ -229,18 +229,18 @@ export async function appendTaskNote(req, res) {
     const username = String(req.user?.username || "").trim();
     if (!username)
       return res.status(401).json({ ok: false, message: "Unauthorised" });
-    const taskName = String(req.params.taskName || "").trim();
+    const taskID = String(req.params.taskID || "").trim();
     const entryRaw = String(req.body?.entry || "").trim();
     const expectedState = String(req.body?.taskState || "").trim();
-    if (!taskName || !entryRaw)
+    if (!taskID || !entryRaw)
       return res.status(400).json({ ok: false, message: "Bad request" });
 
     await conn.beginTransaction();
 
     // Lock the task row while we check & write
     const [[t]] = await conn.query(
-      "SELECT Task_state, Task_app_Acronym FROM task WHERE Task_name = ? FOR UPDATE",
-      [taskName]
+      "SELECT Task_state, Task_app_Acronym FROM task WHERE Task_id = ? FOR UPDATE",
+      [taskID]
     );
     if (!t) {
       await conn.rollback();
@@ -295,8 +295,8 @@ export async function appendTaskNote(req, res) {
     // Append stamped note against the *current* state
     const entryBlock = makeNoteEntry(username, entryRaw, t.Task_state);
     await conn.query(
-      "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-      [entryBlock, taskName]
+      "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+      [entryBlock, taskID]
     );
 
     await conn.commit();
@@ -320,11 +320,11 @@ export async function updateTask(req, res) {
     if (!username)
       return res.status(401).json({ ok: false, message: "Unauthorised" });
 
-    const taskName = String(req.params.taskName || "").trim();
-    if (!taskName)
+    const taskID = String(req.params.taskID || "").trim();
+    if (!taskID)
       return res
         .status(400)
-        .json({ ok: false, message: "Task name is required" });
+        .json({ ok: false, message: "Task ID is required" });
 
     const { Task_plan, Task_state, note } = req.body || {};
 
@@ -345,8 +345,8 @@ export async function updateTask(req, res) {
     await conn.beginTransaction();
 
     const [[t]] = await conn.query(
-      "SELECT Task_name, Task_state, Task_plan, Task_app_Acronym, Task_notes FROM task WHERE Task_name = ? FOR UPDATE",
-      [taskName]
+      "SELECT Task_id, Task_state, Task_plan, Task_app_Acronym, Task_notes FROM task WHERE Task_id = ? FOR UPDATE",
+      [taskID]
     );
     if (!t) {
       await conn.rollback();
@@ -407,9 +407,9 @@ export async function updateTask(req, res) {
       const nextPlan = Task_plan ? String(Task_plan).trim() : null;
 
       // Perform the plan update
-      await conn.query("UPDATE task SET Task_plan = ? WHERE Task_name = ?", [
+      await conn.query("UPDATE task SET Task_plan = ? WHERE Task_id = ?", [
         nextPlan,
-        taskName,
+        taskID,
       ]);
 
       // Only append a "plan changed/cleared" note if this request ALSO changes state
@@ -419,8 +419,8 @@ export async function updateTask(req, res) {
           ? `Plan changed to "${nextPlan}"`
           : "Plan cleared";
         await conn.query(
-          "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-          [makeNoteEntry(username, planMsg), taskName]
+          "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+          [makeNoteEntry(username, planMsg), taskID]
         );
       }
 
@@ -445,8 +445,8 @@ export async function updateTask(req, res) {
       }
 
       const [r] = await conn.query(
-        "UPDATE task SET Task_state='ToDo' WHERE Task_name=? AND Task_state='Open'",
-        [taskName]
+        "UPDATE task SET Task_state='ToDo' WHERE Task_id=? AND Task_state='Open'",
+        [taskID]
       );
       if (r.affectedRows === 0) {
         await conn.rollback();
@@ -460,8 +460,8 @@ export async function updateTask(req, res) {
       didStateChange = true;
 
       await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, `Task released: Open → ToDo`), taskName]
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+        [makeNoteEntry(username, `Task released: Open → ToDo`), taskID]
       );
     }
 
@@ -474,8 +474,8 @@ export async function updateTask(req, res) {
           .json({ ok: false, message: "Not permitted to drop this task" });
       }
       const [r] = await conn.query(
-        "UPDATE task SET Task_state='ToDo', Task_owner=NULL WHERE Task_name=? AND Task_state='Doing'",
-        [taskName]
+        "UPDATE task SET Task_state='ToDo', Task_owner=NULL WHERE Task_id=? AND Task_state='Doing'",
+        [taskID]
       );
       if (r.affectedRows === 0) {
         await conn.rollback();
@@ -489,8 +489,8 @@ export async function updateTask(req, res) {
       didStateChange = true;
 
       await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, `Task dropped: Doing → ToDo`), taskName]
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+        [makeNoteEntry(username, `Task dropped: Doing → ToDo`), taskID]
       );
     }
 
@@ -503,8 +503,8 @@ export async function updateTask(req, res) {
           .json({ ok: false, message: "Not permitted to take this task" });
       }
       const [r] = await conn.query(
-        "UPDATE task SET Task_state='Doing', Task_owner=? WHERE Task_name=? AND Task_state='ToDo'",
-        [username, taskName]
+        "UPDATE task SET Task_state='Doing', Task_owner=? WHERE Task_id=? AND Task_state='ToDo'",
+        [username, taskID]
       );
       if (r.affectedRows === 0) {
         await conn.rollback();
@@ -518,8 +518,8 @@ export async function updateTask(req, res) {
       didStateChange = true;
 
       await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, `Task taken: ToDo → Doing`), taskName]
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+        [makeNoteEntry(username, `Task taken: ToDo → Doing`), taskID]
       );
     }
 
@@ -533,8 +533,8 @@ export async function updateTask(req, res) {
       }
 
       const [r] = await conn.query(
-        "UPDATE task SET Task_state='Done' WHERE Task_name=? AND Task_state='Doing'",
-        [taskName]
+        "UPDATE task SET Task_state='Done' WHERE Task_id=? AND Task_state='Doing'",
+        [taskID]
       );
       if (r.affectedRows === 0) {
         await conn.rollback();
@@ -548,14 +548,14 @@ export async function updateTask(req, res) {
       didStateChange = true;
 
       await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, "Task reviewed: Doing → Done"), taskName]
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+        [makeNoteEntry(username, "Task reviewed: Doing → Done"), taskID]
       );
 
       // Capture email intent and minimal payload for after-commit send
       var notifyAfterCommit = {
         appAcronym: t.Task_app_Acronym,
-        taskName,
+        taskID,
         reviewer: username,
         permitDoneGroups: permitDone,
       };
@@ -570,8 +570,8 @@ export async function updateTask(req, res) {
           .json({ ok: false, message: "Not permitted to approve this task" });
       }
       const [r] = await conn.query(
-        "UPDATE task SET Task_state='Closed' WHERE Task_name=? AND Task_state='Done'",
-        [taskName]
+        "UPDATE task SET Task_state='Closed' WHERE Task_id=? AND Task_state='Done'",
+        [taskID]
       );
       if (r.affectedRows === 0) {
         await conn.rollback();
@@ -585,8 +585,8 @@ export async function updateTask(req, res) {
       didStateChange = true;
 
       await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, `Task approved: Done → Closed`), taskName]
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+        [makeNoteEntry(username, `Task approved: Done → Closed`), taskID]
       );
     }
 
@@ -599,8 +599,8 @@ export async function updateTask(req, res) {
           .json({ ok: false, message: "Not permitted to reject this task" });
       }
       const [r] = await conn.query(
-        "UPDATE task SET Task_state='Doing' WHERE Task_name=? AND Task_state='Done'",
-        [taskName]
+        "UPDATE task SET Task_state='Doing' WHERE Task_id=? AND Task_state='Done'",
+        [taskID]
       );
       if (r.affectedRows === 0) {
         await conn.rollback();
@@ -614,16 +614,16 @@ export async function updateTask(req, res) {
       didStateChange = true;
 
       await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, `Task rejected: Done → Doing`), taskName]
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+        [makeNoteEntry(username, `Task rejected: Done → Doing`), taskID]
       );
     }
 
     // Optional free-form note (keep behaviour)
     if (note && String(note).trim()) {
       await conn.query(
-        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_name = ?",
-        [makeNoteEntry(username, String(note)), taskName]
+        "UPDATE task SET Task_notes = CONCAT(COALESCE(Task_notes,''), ?) WHERE Task_id = ?",
+        [makeNoteEntry(username, String(note)), taskID]
       );
     }
     // If client requested a state change but none of the guarded transitions fired, report conflict
@@ -649,9 +649,9 @@ export async function updateTask(req, res) {
             return;
           }
 
-          const subject = `[${notifyAfterCommit.appAcronym}] Task ready for Review: ${notifyAfterCommit.taskName}`;
+          const subject = `[${notifyAfterCommit.appAcronym}] Task ready for Review: ${notifyAfterCommit.taskID}`;
           const text =
-            `Task "${notifyAfterCommit.taskName}" in Application "${notifyAfterCommit.appAcronym}" ` +
+            `Task "${notifyAfterCommit.taskID}" in Application "${notifyAfterCommit.appAcronym}" ` +
             `was promoted to Done by ${notifyAfterCommit.reviewer}. ` +
             `Please review the task.`;
 
@@ -663,10 +663,10 @@ export async function updateTask(req, res) {
     }
 
     const [rows] = await pool.query(
-      `SELECT Task_name, Task_description, Task_notes, Task_plan, Task_app_Acronym,
+      `SELECT Task_id, Task_description, Task_notes, Task_plan, Task_app_Acronym,
               Task_state, Task_creator, Task_owner, Task_createDate, Task_id
-       FROM task WHERE Task_name = ?`,
-      [taskName]
+       FROM task WHERE Task_id = ?`,
+      [taskID]
     );
     res.json(rows[0]);
   } catch (e) {
@@ -805,7 +805,7 @@ export async function promoteTaskToDone(req, res) {
     const permitDone = csv(a.App_permit_Done);
     const notifyAfterCommit = {
       appAcronym: t.Task_app_Acronym,
-      taskName: t.Task_name,
+      taskID: taskID,
       reviewer: username,
       permitDoneGroups: permitDone,
     };
@@ -816,9 +816,9 @@ export async function promoteTaskToDone(req, res) {
       try {
         const emails = await getEmailsForGroups(notifyAfterCommit.permitDoneGroups);
         if (!emails.length) return;
-        const subject = `[${notifyAfterCommit.appAcronym}] Task ready for Review: ${notifyAfterCommit.taskName}`;
+        const subject = `[${notifyAfterCommit.appAcronym}] Task ready for Review: ${notifyAfterCommit.taskID}`;
         const text =
-          `Task "${notifyAfterCommit.taskName}" in Application "${notifyAfterCommit.appAcronym}" ` +
+          `Task "${notifyAfterCommit.taskID}" in Application "${notifyAfterCommit.appAcronym}" ` +
           `was promoted to Done by ${notifyAfterCommit.reviewer}. Please review the task.`;
         await sendMail(emails.join(","), subject, text);
       } catch (e) {
