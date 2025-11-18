@@ -783,11 +783,11 @@ export async function promoteTaskToDone(req, res) {
       return res.status(400).json({ status: "TR_2" });
     }
 
-    // IAM_2: Not authorised (user not in required ToDo permit groups)
-    const permitToDo = csv(a.App_permit_toDoList);
+    // IAM_2: Not authorised (user not in required Doing permit groups)
+    const permitDoing = csv(a.App_permit_Doing);
     const inAny =
-      permitToDo.length &&
-      (await Promise.all(permitToDo.map((g) => isUserInGroup(username, g)))).some(Boolean);
+      permitDoing.length &&
+      (await Promise.all(permitDoing.map((g) => isUserInGroup(username, g)))).some(Boolean);
 
     if (!inAny) {
       await conn.rollback();
